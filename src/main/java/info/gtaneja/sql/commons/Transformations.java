@@ -1,0 +1,406 @@
+package info.gtaneja.sql.commons;
+
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.JsonNodeFactory;
+import com.fasterxml.jackson.databind.node.NullNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+
+import java.sql.SQLException;
+import java.util.*;
+import java.util.function.Consumer;
+import java.util.function.Function;
+
+import static info.gtaneja.sql.commons.ExpressionConstants.*;
+
+public class Transformations {
+
+    private static final ObjectMapper objectMapper = new ObjectMapper();
+
+    public static final String JSON_SERIALIZE_SQL = "SELECT  cast(json_serialize_sql('%s') as string)";
+
+    public static final String JSON_DESERIALIZE_SQL = "SELECT json_deserialize_sql( cast('%s' as json))";
+
+    public static final Function<JsonNode, Boolean> IS_CONSTANT = isClassAndType(CONSTANT_CLASS,
+            CONSTANT_TYPE);
+    public static final Function<JsonNode, Boolean> IS_REFERENCE = isClassAndType(COLUMN_REF_CLASS,
+            COLUMN_REF_TYPE);
+    public static final Function<JsonNode, Boolean> IS_CONJUNCTION_AND = isClassAndType(CONJUNCTION_CLASS,
+            CONJUNCTION_TYPE_AND);
+    public static final Function<JsonNode, Boolean> IS_EMPTY_CONJUNCTION_AND = n -> {
+        if (!IS_CONJUNCTION_AND.apply(n)) {
+            return false;
+        }
+        JsonNode children = n.get("children");
+        return children == null || children.isEmpty();
+    };
+
+    public static final Function<JsonNode, Boolean> IS_SELECT = isType(SELECT_NODE_TYPE);
+
+    public static final Function<JsonNode, Boolean> IS_COMPARISON = isClass(COMPARISON_CLASS);
+
+    /**
+     * Set string to ?, Integer to -1 and Decimal to -1.0
+     */
+    public static final Function<JsonNode, JsonNode> REPLACE_CONSTANT = node -> {
+        JsonNode result = node.deepCopy();
+        ObjectNode valueNode = (ObjectNode) result.get("value");
+        ObjectNode type = (ObjectNode) valueNode.get("type");
+        String id = type.get("id").asText();
+        if (id.equals("VARCHAR")) {
+            valueNode.put("value", "?");
+        } else if (id.equals("INTEGER")) {
+            valueNode.put("value", -1);
+        } else if (id.equals("DECIMAL")) {
+            valueNode.put("value", -1);
+            ObjectNode typeInfo = (ObjectNode) type.get("type_info").deepCopy();
+            typeInfo.put("width", 1);
+            typeInfo.put("scale", 1);
+            valueNode.set("type_info", typeInfo);
+        }
+        return result;
+    };
+
+    public static Function<JsonNode, Boolean> isClassAndType(String clazz, String type) {
+        return node -> {
+            JsonNode classNode = node.get("class");
+            JsonNode typeNode = node.get("type");
+            return classNode != null && typeNode != null && classNode.asText().equals(clazz)
+                    && typeNode.asText().equals(type);
+        };
+    }
+
+    public static Function<JsonNode, Boolean> isClass(String clazz) {
+        return node -> {
+            JsonNode classNode = node.get("class");
+            return classNode != null && classNode.asText().equals(clazz);
+        };
+    }
+
+    public static Function<JsonNode, Boolean> isType(String type) {
+        return node -> {
+            JsonNode typeNode = node.get("type");
+            return typeNode != null && typeNode.asText().equals(type);
+        };
+    }
+
+    public static Function<JsonNode, JsonNode> replaceEqualMinMaxFromComparison(Map<String, String> minMapping,
+                                                                                Map<String, String> maxMapping,
+                                                                                Map<String, String> dataTypeMap) {
+        return n -> {
+            JsonNode node = n.deepCopy();
+            List<JsonNode> references = collectReferences(node);
+            if (references.isEmpty()) {
+                return ExpressionFactory.trueExpression();
+            }
+
+            List<List<String>> columnNames = collectColumnNames(references);
+            boolean failed = false;
+            for (List<String> columnName : columnNames) {
+                if (columnName.size() != 1) {
+                    failed = true;
+                    break;
+                }
+                if (!minMapping.containsKey(columnName.get(0))) {
+                    failed = true;
+                    break;
+                }
+            }
+            List<JsonNode> literalObjects = collectLiterals(node);
+            if (literalObjects.size() != 1 || references.size() != 1) {
+                failed = true;
+            }
+            JsonNode literalObject = literalObjects.get(0);
+            JsonNode refObject = references.get(0);
+            String[] col = getReferenceName(refObject);
+            if (failed) {
+                return ExpressionFactory.trueExpression();
+            }
+            if (isUpperBound(node)) {
+                String maxC = maxMapping.get(col[0]);
+                return constructUpperBoundPredicate(new String[]{maxC}, literalObject, dataTypeMap.get(col[0]));
+            }
+            if (isLowerBound(node)) {
+                String minC = minMapping.get(col[0]);
+                return constructLowerBoundPredicate(new String[]{minC}, literalObject, dataTypeMap.get(col[0]));
+            }
+            return ExpressionFactory.trueExpression();
+        };
+    }
+
+    public static Function<JsonNode, JsonNode> replaceEqualMinMaxFromAndConjunction(Map<String, String> minMapping,
+                                                                                    Map<String, String> maxMapping,
+                                                                                    Map<String, String> dataTypeMap) {
+        return n -> {
+            JsonNode copyNode = n.deepCopy();
+            Iterator<JsonNode> it = copyNode.get("children").iterator();
+            ArrayNode newFilter = new ArrayNode(new JsonNodeFactory(false));
+            Function<JsonNode, JsonNode> replaceRule = replaceEqualMinMaxFromComparison(minMapping, maxMapping, dataTypeMap);
+            while (it.hasNext()) {
+                JsonNode node = it.next();
+                JsonNode newNode = replaceRule.apply(node);
+                if (newNode != null) {
+                    newFilter.add(newNode);
+                }
+            }
+            ((ObjectNode) copyNode).set("children", newFilter);
+            return copyNode;
+        };
+    }
+
+    public static Function<JsonNode, JsonNode> removeNonPartitionColumnsPredicatesInQuery(String statTable, Set<String> partitionColumns) {
+        return n -> {
+            ObjectNode c = n.deepCopy();
+            ObjectNode from_table = (ObjectNode) c.get("from_table");
+            from_table.put("table_name", statTable);
+            JsonNode where = n.get("where_clause");
+            if (where == null || where instanceof NullNode) {
+                return c;
+            }
+            if (IS_CONJUNCTION_AND.apply(where)) {
+                JsonNode w = transform(where, Transformations.IS_CONJUNCTION_AND,
+                        removeNonPartitionColumnsPredicatesFromAndConjunction(partitionColumns));
+                c.set("where_clause", w);
+            } else if (IS_COMPARISON.apply(n)) {
+                JsonNode w = transform(where, IS_COMPARISON,
+                        removeNonPartitionColumnsPredicatesFromComparison(partitionColumns));
+                c.set("where_clause", w);
+            } else {
+                c.set("where_clause", null);
+            }
+            return c;
+        };
+    }
+
+    public static Function<JsonNode, JsonNode> replaceEqualMinMaxInQuery(String statTable,
+                                                                         Map<String, String> minMapping,
+                                                                         Map<String, String> maxMapping,
+                                                                         Map<String, String> dataTypeMap) {
+        return n -> {
+            ObjectNode c = n.deepCopy();
+            ObjectNode from_table = (ObjectNode) c.get("from_table");
+            from_table.put("table_name", statTable);
+            JsonNode where = n.get("where_clause");
+            if (where == null || where instanceof NullNode) {
+                return c;
+            }
+            if (IS_CONJUNCTION_AND.apply(where)) {
+                JsonNode w = Transformations.transform(where, IS_CONJUNCTION_AND, replaceEqualMinMaxFromAndConjunction(minMapping, maxMapping, dataTypeMap));
+                c.set("where_clause", w);
+            } else if (IS_COMPARISON.apply(n)) {
+                JsonNode w = Transformations.transform(where, IS_COMPARISON, replaceEqualMinMaxFromComparison(minMapping, maxMapping, dataTypeMap));
+                c.set("where_clause", w);
+            } else {
+                c.set("where_clause", null);
+            }
+            return c;
+        };
+    }
+
+    public static String[] getReferenceName(JsonNode node) {
+        ArrayNode array = (ArrayNode) node.get("column_names");
+        String[] res = new String[array.size()];
+        for (int i = 0; i < res.length; i++) {
+            res[i] = array.get(i).asText();
+        }
+        return res;
+    }
+
+    /**
+     * a < 10
+     * a <= 10
+     * 10 > a
+     * 10 >=a
+     * a = 10
+     * 10 = a
+     */
+    public static boolean isUpperBound(JsonNode node) {
+        JsonNode left = node.get("left");
+        JsonNode right = node.get("right");
+        String clazz = node.get("class").asText();
+        String type = node.get("type").asText();
+        return (IS_REFERENCE.apply(left) && IS_CONSTANT.apply(right) && clazz.equals(COMPARISON_CLASS)
+                && (type.equals(COMPARE_TYPE_LESSTHAN) || type.equals(COMPARE_TYPE_LESSTHANOREQUALTO) || type.equals(COMPARE_TYPE_EQUAL))
+                || IS_REFERENCE.apply(right) && IS_CONSTANT.apply(left) && clazz.equals(COMPARISON_CLASS)
+                && (type.equals(COMPARE_TYPE_GREATERTHAN) || type.equals(COMPARE_TYPE_GREATERTHANOREQUALTO) || type.equals(COMPARE_TYPE_EQUAL)));
+    }
+
+
+    /**
+     * a > 10
+     * a >= 10
+     * 10 < a
+     * 10 <= a
+     * a = 10
+     * 10 = a
+     */
+    public static boolean isLowerBound(JsonNode node) {
+        JsonNode left = node.get("left");
+        JsonNode right = node.get("right");
+        String clazz = node.get("class").asText();
+        String type = node.get("type").asText();
+        return (IS_REFERENCE.apply(left) && IS_CONSTANT.apply(right) && clazz.equals(COMPARISON_CLASS)
+                && (type.equals(COMPARE_TYPE_GREATERTHAN) || type.equals(COMPARE_TYPE_GREATERTHANOREQUALTO) || type.equals(COMPARE_TYPE_EQUAL))
+                || IS_REFERENCE.apply(right) && IS_CONSTANT.apply(left) && clazz.equals(COMPARISON_CLASS)
+                && (type.equals(COMPARE_TYPE_LESSTHAN) || type.equals(COMPARE_TYPE_LESSTHANOREQUALTO) || type.equals(COMPARE_TYPE_EQUAL)));
+    }
+
+
+
+
+    /**
+     *  if(max_a=null, true, cast(max_a as int) >= cast(x as int)
+     **/
+    public static JsonNode constructUpperBoundPredicate(String[] col, JsonNode literal, String datatype) {
+        JsonNode nullNode = ExpressionFactory.constant(null);
+        JsonNode referenceNode = ExpressionFactory.reference(col);
+        JsonNode ifCondition = ExpressionFactory.equalExpr(referenceNode, nullNode);
+        JsonNode then = ExpressionFactory.cast(ExpressionFactory.constant("t"), "BOOLEAN");
+        JsonNode elseExpression = ExpressionFactory.greaterThanOrEqualExpr(ExpressionFactory.cast(referenceNode.deepCopy(), datatype), ExpressionFactory.cast(literal, datatype));
+        return ExpressionFactory.ifExpr(ifCondition, then, elseExpression);
+    }
+
+    /**
+     *  if(min_a=null, true, cast(min_a as int) <= cast(x as int)
+     **/
+    public static JsonNode constructLowerBoundPredicate(String[] col, JsonNode literal, String datatype) {
+        JsonNode nullNode = ExpressionFactory.constant(null);
+        JsonNode referenceNode = ExpressionFactory.reference(col);
+        JsonNode ifCondition = ExpressionFactory.equalExpr(referenceNode, nullNode);
+        JsonNode then = ExpressionFactory.cast(ExpressionFactory.constant("t"), "BOOLEAN");
+        JsonNode elseExpression = ExpressionFactory.lessThanOrEqualExpr(ExpressionFactory.cast(referenceNode.deepCopy(), datatype), ExpressionFactory.cast(literal, datatype));
+        return ExpressionFactory.ifExpr(ifCondition, then, elseExpression);
+    }
+
+
+    public static Function<JsonNode, JsonNode> removeNonPartitionColumnsPredicatesFromComparison(Set<String> partitions) {
+        return n -> {
+            JsonNode node = n.deepCopy();
+            List<JsonNode> references = collectReferences(node);
+            if (references.isEmpty()) {
+                return ExpressionFactory.trueExpression();
+            }
+            List<List<String>> columnNames = collectColumnNames(references);
+            boolean failed = false;
+            for (List<String> columnName : columnNames) {
+                if (columnName.size() != 1) {
+                    return ExpressionFactory.trueExpression();
+                }
+                if (!partitions.contains(columnName.get(0))) {
+                    return ExpressionFactory.trueExpression();
+                }
+            }
+            return node;
+        };
+    }
+
+    public static Function<JsonNode, JsonNode> removeNonPartitionColumnsPredicatesFromAndConjunction(Set<String> partitions) {
+        return n -> {
+            ObjectNode node = n.deepCopy();
+            Iterator<JsonNode> it = node.get("children").iterator();
+            ArrayNode newChildren = new ArrayNode(JsonNodeFactory.instance);
+
+            while (it.hasNext()) {
+                JsonNode next = it.next();
+                JsonNode nc = removeNonPartitionColumnsPredicatesFromComparison(partitions).apply(next);
+                newChildren.add(nc);
+            }
+            node.set("children", newChildren);
+            return node;
+        };
+    }
+
+    static List<List<String>> collectColumnNames(List<JsonNode> references) {
+        List<List<String>> result = new ArrayList<>();
+        for (JsonNode node : references) {
+            JsonNode names = node.get("column_names");
+            List<String> currentList = new ArrayList<>();
+            for (JsonNode n : names) {
+                currentList.add(n.asText());
+            }
+            result.add(currentList);
+        }
+        return result;
+    }
+
+    public static JsonNode transform(JsonNode node, Function<JsonNode, Boolean> matchFn,
+                                     Function<JsonNode, JsonNode> transformFn) {
+        if (matchFn.apply(node)) {
+            return transformFn.apply(node);
+        }
+
+        if (node instanceof ObjectNode objectNode) {
+            for (Iterator<String> it = objectNode.fieldNames(); it.hasNext(); ) {
+                String field = it.next();
+                JsonNode current = objectNode.get(field);
+                JsonNode newNode = transform(current, matchFn, transformFn);
+                objectNode.set(field, newNode);
+            }
+            return objectNode;
+        }
+        if (node instanceof ArrayNode arrayNode) {
+            for (int i = 0; i < arrayNode.size(); i++) {
+                JsonNode current = arrayNode.get(i);
+                JsonNode newNode = transform(current, matchFn, transformFn);
+                arrayNode.set(i, newNode);
+            }
+            return arrayNode;
+        }
+        return node;
+    }
+
+    public static List<JsonNode> collectLiterals(JsonNode tree) {
+        final List<JsonNode> list = new ArrayList<>();
+        find(tree, IS_CONSTANT, list::add);
+        return list;
+    }
+
+    public static List<JsonNode> collectReferences(JsonNode tree) {
+        final List<JsonNode> list = new ArrayList<>();
+        find(tree, IS_REFERENCE, list::add);
+        return list;
+    }
+
+    public static void find(JsonNode node, Function<JsonNode, Boolean> matchFn,
+                            Consumer<JsonNode> collectFn) {
+        if (matchFn.apply(node)) {
+            collectFn.accept(node);
+            return;
+        }
+        Iterable<JsonNode> children = getChildren(node);
+        for (JsonNode c : children) {
+            find(c, matchFn, collectFn);
+        }
+    }
+
+    public static Iterable<JsonNode> getChildren(JsonNode node) {
+        JsonNode children = node.get("children");
+        if (children != null) {
+            return children;
+        }
+        JsonNode left = node.get("left");
+        JsonNode right = node.get("right");
+        if (left != null && right != null) {
+            return List.of(left, right);
+        } else {
+            return List.of();
+        }
+    }
+
+    public static JsonNode parseToTree(String sql) throws SQLException, JsonProcessingException {
+        String escapeSql = escapeSpecialChar(sql);
+        String jsonString = ConnectionPool.collectFirst(String.format(JSON_SERIALIZE_SQL, escapeSql), String.class);
+        return objectMapper.readTree(jsonString);
+    }
+
+    public static String parseToSql(JsonNode node) throws SQLException {
+        String sql = String.format(JSON_DESERIALIZE_SQL, node.toString());
+        return ConnectionPool.collectFirst(sql, String.class);
+    }
+
+    private static String escapeSpecialChar(String sql) {
+        return sql.replaceAll("'", "''");
+    }
+}
