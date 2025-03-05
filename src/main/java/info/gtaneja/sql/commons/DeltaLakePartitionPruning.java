@@ -45,8 +45,8 @@ public class DeltaLakePartitionPruning extends PartitionPruning {
             JsonNode tree = Transformations.parseToTree(sql);
             JsonNode newTree = Transformations.transform(tree, Transformations.IS_SELECT,
                     Transformations.replaceEqualMinMaxInQuery("t_stat", minMap, maxMap, dataTypes));
-            System.out.println(sql);
-            System.out.println(Transformations.parseToSql(newTree));
+            System.out.printf("SQL : %s \n", sql);
+            System.out.printf("Transformed SQL : %s", Transformations.parseToSql(newTree));
         }
     }
 }

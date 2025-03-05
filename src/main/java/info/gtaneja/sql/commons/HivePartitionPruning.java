@@ -20,8 +20,8 @@ public class HivePartitionPruning extends PartitionPruning {
             JsonNode tree = Transformations.parseToTree(sql);
             JsonNode newTree = Transformations.transform(tree, Transformations.IS_SELECT,
                     Transformations.removeNonPartitionColumnsPredicatesInQuery("stat_t", Set.of("p1")));
-            System.out.println(sql);
-            System.out.println(Transformations.parseToSql(newTree));
+            System.out.printf("SQL : %s \n", sql);
+            System.out.printf("Transformed SQL : %s", Transformations.parseToSql(newTree));
         }
     }
 }

@@ -23,15 +23,20 @@ public class Fingerprint {
 
     public static void main(String[] args) throws SQLException, IOException, NoSuchAlgorithmException {
         //String sql1 = "select  2.0, 3, 'one', 4.0, 5 , true from t where num > 1 and num >= 1 and str = 'str1' and date in ('2014-01-01') and if(min_a=null, true, min_a <= cast(x as int))";
-        String sql1 = "select * from t where num > 1 and num2 >= 1.0 and str = 'str1' and date in ('2014-01-01')";
-        String sql2 = "select * from t where num > 2 and num2 >= 2.0 and str = 'str2' and date in ('2014-01-02')";
+        String sql1 = "select * from t where num1 > 1 and num2 < 1.0 and str = 'str1'";
+        String sql2 = "select * from t where num1 > 2 and num2 <h 2.0 and str = 'str2'";
+
+        sql1 = "SELECT c1, c2 FROM t WHERE c3 = 1 AND c4 = 'str1'";
+        sql2 = "SELECT c1, c2 FROM t WHERE c3 = 2 AND c4 = 'str2'";
         String[] sqls = {sql1, sql2};
         String[] res = new String[sqls.length];
         for (int i = 0; i < sqls.length; i++) {
             res[i] = generate(sqls[i]);
         }
-        for (String r : res) {
-            System.out.println(r);
+        for (int i = 0 ; i < res.length; i ++) {
+            String r = res[i];
+            String sql = sqls[i];
+            System.out.printf("SQL: %s, fingerprint: %s%n", sql, r);
         }
     }
 
