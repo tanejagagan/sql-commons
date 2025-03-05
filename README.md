@@ -4,7 +4,7 @@
 - java 17
 - maven 
 
-## Compile to project
+## Compile project
 `./mvnw compile`
 
 ## Fingerprinting
