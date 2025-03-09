@@ -8,6 +8,7 @@ import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.NullNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
+import java.sql.Connection;
 import java.sql.SQLException;
 import java.util.*;
 import java.util.function.Consumer;
@@ -150,11 +151,10 @@ public class Transformations {
         };
     }
 
-    public static Function<JsonNode, JsonNode> removeNonPartitionColumnsPredicatesInQuery(String statTable, Set<String> partitionColumns) {
+
+    public static Function<JsonNode, JsonNode> removeNonPartitionColumnsPredicatesInQuery(Set<String> partitionColumns) {
         return n -> {
             ObjectNode c = n.deepCopy();
-            ObjectNode from_table = (ObjectNode) c.get("from_table");
-            from_table.put("table_name", statTable);
             JsonNode where = n.get("where_clause");
             if (where == null || where instanceof NullNode) {
                 return c;
@@ -163,7 +163,7 @@ public class Transformations {
                 JsonNode w = transform(where, Transformations.IS_CONJUNCTION_AND,
                         removeNonPartitionColumnsPredicatesFromAndConjunction(partitionColumns));
                 c.set("where_clause", w);
-            } else if (IS_COMPARISON.apply(n)) {
+            } else if (IS_COMPARISON.apply(where)) {
                 JsonNode w = transform(where, IS_COMPARISON,
                         removeNonPartitionColumnsPredicatesFromComparison(partitionColumns));
                 c.set("where_clause", w);
@@ -246,8 +246,6 @@ public class Transformations {
                 || IS_REFERENCE.apply(right) && IS_CONSTANT.apply(left) && clazz.equals(COMPARISON_CLASS)
                 && (type.equals(COMPARE_TYPE_LESSTHAN) || type.equals(COMPARE_TYPE_LESSTHANOREQUALTO) || type.equals(COMPARE_TYPE_EQUAL)));
     }
-
-
 
 
     /**
@@ -389,10 +387,21 @@ public class Transformations {
         }
     }
 
+    public static JsonNode parseToTree(Connection connection, String sql) throws SQLException, JsonProcessingException {
+        String escapeSql = escapeSpecialChar(sql);
+        String jsonString = ConnectionPool.collectFirst(connection, String.format(JSON_SERIALIZE_SQL, escapeSql), String.class);
+        return objectMapper.readTree(jsonString);
+    }
+
     public static JsonNode parseToTree(String sql) throws SQLException, JsonProcessingException {
         String escapeSql = escapeSpecialChar(sql);
         String jsonString = ConnectionPool.collectFirst(String.format(JSON_SERIALIZE_SQL, escapeSql), String.class);
         return objectMapper.readTree(jsonString);
+    }
+
+    public static String parseToSql(Connection connection, JsonNode node) throws SQLException {
+        String sql = String.format(JSON_DESERIALIZE_SQL, node.toString());
+        return ConnectionPool.collectFirst(connection, sql, String.class);
     }
 
     public static String parseToSql(JsonNode node) throws SQLException {

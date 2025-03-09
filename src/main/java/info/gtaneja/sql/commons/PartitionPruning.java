@@ -2,6 +2,7 @@ package info.gtaneja.sql.commons;
 
 import java.util.Map;
 
+
 abstract class PartitionPruning {
 
     public String singleQuote(String col) {
