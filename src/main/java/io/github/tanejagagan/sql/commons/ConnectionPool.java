@@ -1,4 +1,4 @@
-package info.gtaneja.sql.commons;
+package io.github.tanejagagan.sql.commons;
 
 import org.apache.arrow.c.ArrowArrayStream;
 import org.apache.arrow.c.Data;

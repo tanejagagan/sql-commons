@@ -1,4 +1,4 @@
-package info.gtaneja.sql.commons;
+package io.github.tanejagagan.sql.commons;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;

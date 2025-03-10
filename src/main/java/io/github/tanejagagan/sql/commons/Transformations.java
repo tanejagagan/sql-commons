@@ -1,4 +1,4 @@
-package info.gtaneja.sql.commons;
+package io.github.tanejagagan.sql.commons;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -14,7 +14,7 @@ import java.util.*;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
-import static info.gtaneja.sql.commons.ExpressionConstants.*;
+import static io.github.tanejagagan.sql.commons.ExpressionConstants.*;
 
 public class Transformations {
 

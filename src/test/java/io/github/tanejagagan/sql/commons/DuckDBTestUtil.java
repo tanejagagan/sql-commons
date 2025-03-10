@@ -1,4 +1,4 @@
-package info.gtaneja.sql.commons;
+package io.github.tanejagagan.sql.commons;
 
 import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.memory.RootAllocator;

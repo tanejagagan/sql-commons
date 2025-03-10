@@ -1,4 +1,4 @@
-package info.gtaneja.sql.commons;
+package io.github.tanejagagan.sql.commons;
 
 public class ExpressionConstants {
     public static final String CONSTANT_CLASS = "CONSTANT";
