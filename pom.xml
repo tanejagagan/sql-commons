@@ -3,10 +3,29 @@
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
-
     <groupId>io.github.tanejagagan.sql</groupId>
     <artifactId>duckdb-sql-commons</artifactId>
+    <name>duckdb-sql-commons</name>
+    <description>Common utilities from duckdb jdbc and sql transformation</description>
+    <url>https://github.com/tanejagagan/sql-commons</url>
     <version>0.0.1</version>
+    <licenses>
+        <license>
+            <name>The Apache License, Version 2.0</name>
+            <url>http://www.apache.org/licenses/LICENSE-2.0.txt</url>
+        </license>
+    </licenses>
+    <developers>
+        <developer>
+            <name>Gagan Taneja</name>
+            <email>tanejagaga@gmail.com</email>
+        </developer>
+    </developers>
+    <scm>
+        <connection>scm:git:git://github.com/tanejagagan/sql-commons.git</connection>
+        <developerConnection>scm:git:ssh://github.com:tanejagagan/sql-commons.git</developerConnection>
+        <url>http://github.com/tanejagagan//sql-commons.git/tree/master</url>
+    </scm>
     <properties>
         <maven.compiler.source>17</maven.compiler.source>
         <maven.compiler.target>17</maven.compiler.target>
