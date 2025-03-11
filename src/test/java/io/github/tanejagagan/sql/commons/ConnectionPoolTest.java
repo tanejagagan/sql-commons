@@ -3,6 +3,8 @@ package io.github.tanejagagan.sql.commons;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.SQLException;
 
@@ -10,11 +12,12 @@ public class ConnectionPoolTest {
 
     @Test
     public void testPreConnectionSql() throws SQLException, IOException, InterruptedException {
-        String tempLocation = "/tmp/test";
+        String tempLocation = newTempDir();
         try (Connection c = ConnectionPool.getConnection()) {
             ConnectionPool.execute(c, String.format("ATTACH '%s/file1.db' AS db1", tempLocation));
             ConnectionPool.execute(c, String.format("ATTACH '%s/file2.db' AS db2", tempLocation));
             ConnectionPool.execute(c, "use db1");
+            ConnectionPool.execute(c, "create table t(id int)");
         }
         try {
             // This should fail
@@ -43,5 +46,10 @@ public class ConnectionPoolTest {
         } catch (SQLException | IOException | AssertionError e) {
             throw new RuntimeException(e);
         }
+    }
+
+    private static String newTempDir() throws IOException {
+        Path tempDir = Files.createTempDirectory("duckdb-sql-commons-");
+        return tempDir.toString();
     }
 }
