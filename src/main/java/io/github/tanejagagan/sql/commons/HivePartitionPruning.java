@@ -104,9 +104,9 @@ public class HivePartitionPruning extends PartitionPruning {
      * @throws IOException  This is slightly complicated because we do not have function in duckdb which unescape hive path and java based udf are still not supported
      *                      its divided into 3 steps
      *                      1. Run the query on duckdb to get filename, size, partitions from duckdb.
-     *                      Schema of read data is <filename string, size bigint, partitions array<string>>
+     *                      Schema of read data is &lt;filename string, size bigint, partitions array&lt;string&gt;&gt;
      *                      2. collect the data from step 1 and unescape the partitions in java context using UNESCAPE_FN.
-     *                      Schema at the end <filename string, size bigint, partitions <array<string>, unescape_partitions<array<string>>
+     *                      Schema at the end &lt;filename string, size bigint, partitions &lt;array&lt;string&gt;, unescape_partitions&lt;array%lt;string&gt;&gt;
      *                      3. Serialize the data in step 2 as temp table and run the pruning sql
      *                      Final Sql looks something like `select size, filename, cast(unescape_partitions[1] as date) as dt, ....from temp table where dt = ?
      *                      4. Remove all the filter which do not have partition columns

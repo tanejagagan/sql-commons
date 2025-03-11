@@ -19,6 +19,6 @@ Read more about it at https://medium.com/@tanejagagan/ac5e00cb96b5
 - `./mvnw exec:java -Dexec.mainClass="io.github.tanejagagan.sql.commons.DeltaLakePartitionPruning"`
 
 ## Hive partition pruning
-`./mvnw exec:java -Dexec.mainClass="info.gtaneja.sql.commons.HivePartitionPruning"`
+`./mvnw exec:java -Dexec.mainClass="io.github.tanejagagan.sql.commons.HivePartitionPruning"`
 
 ## TODO Iceberg partition pruning

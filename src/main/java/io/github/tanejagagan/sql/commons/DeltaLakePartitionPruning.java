@@ -9,23 +9,23 @@ import java.util.Map;
 
 /**
  * Lower bound
- * String input_1_0 = "select * from t where c1 > 10";
- * String input_1_1 = "select * from t where  10 < c1";
- * String input_1_2 = "select * from t where c1 >= 10";
- * String input_1_3 = "select * from t where  10 <= c1";
- * String input_1_4 = "select * from t where c1 = 10;
- * String input_1_4 = "select * from t where 10 = c1;
+ * String input_1_0 = select * from t where c1 &gt; 10
+ * String input_1_1 = select * from t where  10 &lt; c1
+ * String input_1_2 = select * from t where c1 &gt;= 10
+ * String input_1_3 = select * from t where  10 &lt;= c1
+ * String input_1_4 = select * from t where c1 = 10
+ * String input_1_4 = select * from t where 10 = c1
  * String expected_1 = view +
- * "select filename from stat_t where if( min_c1=null, true, cast(min_c1 as int) >= cast(10 as int))";
+ * select filename from stat_t where if( min_c1=null, true, cast(min_c1 as int) &gt;= cast(10 as int));
  * Upper bound
- * String input_2_0 = "select * from t where c1 < 10";
- * String input_2_1 = "select * from t where  10 > c1";
- * String input_2_2 = "select * from t where c1 <= 10";
- * String input_2_3 = "select * from t where  10 >= c1";
- * String input_1_4 = "select * from t where c1 = 10;
- * String input_1_4 = "select * from t where 10 = c1;
+ * String input_2_0 = select * from t where c1 &lt; 10;
+ * String input_2_1 = select * from t where  10 &gt; c1;
+ * String input_2_2 = select * from t where c1 &lt;= 10;
+ * String input_2_3 = select * from t where  10 &gt;= c1;
+ * String input_1_4 = select * from t where c1 = 10;
+ * String input_1_4 = select * from t where 10 = c1;
  * String expected_2 = view +
- * "select filename from stat_t where if( min_c1=null, true, cast(max_c1 as int) <= cast(10 as int))";
+ * select filename from stat_t where if( min_c1=null, true, cast(max_c1 as int) &lt;= cast(10 as int));
  **/
 
 public class DeltaLakePartitionPruning extends PartitionPruning {

@@ -14,12 +14,15 @@ import org.duckdb.DuckDBResultSet;
 import java.io.Closeable;
 import java.io.IOException;
 import java.sql.*;
+import java.util.ArrayList;
 import java.util.List;
 
 public enum ConnectionPool {
     INSTANCE;
 
-    DuckDBConnection connection = null;
+    private final DuckDBConnection connection;
+
+    private final ArrayList<String> preGetConnectionStatements = new ArrayList<>();
 
     ConnectionPool() {
         try {
@@ -29,6 +32,15 @@ public enum ConnectionPool {
         }
     }
 
+    /**
+     *
+     * @param connection
+     * @param sql sql to be executed
+     * @param tClass class of the return object
+     * @return fist value of the result set
+     * @param <T>
+     * @throws SQLException
+     */
     public static <T> T collectFirst(Connection connection, String sql, Class<T> tClass) throws SQLException {
         try(Statement statement = connection.createStatement()) {
             statement.execute(sql);
@@ -39,6 +51,14 @@ public enum ConnectionPool {
         }
     }
 
+    /**
+     *
+     * @param sql
+     * @param tClass
+     * @return
+     * @param <T>
+     * @throws SQLException
+     */
     public static <T> T collectFirst(String sql, Class<T> tClass) throws SQLException {
         try (Connection connection = getConnection();
              Statement statement = connection.createStatement()) {
@@ -50,6 +70,13 @@ public enum ConnectionPool {
         }
     }
 
+    /**
+     *
+     * @param sql
+     * @throws SQLException
+     * @throws IOException
+     * Used for debugging to print the output of the sql
+     */
     public static void printResult(String sql) throws SQLException, IOException {
         try (Connection connection = getConnection();
              BufferAllocator rootAllocator = new RootAllocator();
@@ -64,6 +91,15 @@ public enum ConnectionPool {
         }
     }
 
+    /**
+     *
+     * @param connection
+     * @param allocator
+     * @param sql
+     * @throws SQLException
+     * @throws IOException
+     * Used for debugging to print the output of the sql
+     */
     public static void printResult(Connection connection, BufferAllocator allocator, String sql) throws SQLException, IOException {
         try (Statement statement = connection.createStatement()) {
             statement.execute(sql);
@@ -76,6 +112,19 @@ public enum ConnectionPool {
         }
     }
 
+    /**
+     *
+     * @param connection
+     * @param allocator
+     * @param reader
+     * @param function
+     * @param sourceColumns
+     * @param targetField
+     * @param tableName
+     * @return
+     * @throws IOException
+     *
+     */
     public static Closeable createTempTable(DuckDBConnection connection,
                                             BufferAllocator allocator,
                                             ArrowReader reader,
@@ -97,12 +146,27 @@ public enum ConnectionPool {
         };
     }
 
+    /**
+     *
+     * @param connection
+     * @param sql
+     * @throws SQLException
+     */
     public static void execute(Connection connection, String sql) throws SQLException {
         try(Statement statement = connection.createStatement()) {
             statement.execute(sql);
         }
     }
 
+    /**
+     *
+     * @param connection
+     * @param allocator
+     * @param sql
+     * @param batchSize
+     * @return
+     * @throws SQLException
+     */
     public static ArrowReader getReader(DuckDBConnection connection,
                                         BufferAllocator allocator,  String sql, int batchSize) throws SQLException {
         final Statement statement = connection.createStatement();
@@ -149,6 +213,30 @@ public enum ConnectionPool {
     }
 
     public DuckDBConnection getConnectionInternal() throws SQLException {
-        return (DuckDBConnection) connection.duplicate();
+        DuckDBConnection result = (DuckDBConnection) connection.duplicate();
+        try (Statement statement = result.createStatement()) {
+            for (String sql : preGetConnectionStatements) {
+                statement.execute(sql);
+            }
+        }
+        return result;
+    }
+
+    /**
+     *
+     * @param sql add a sql which will be executed before returning the connection by the method getConnection()
+     *            This method should be invoked at the beginning of the main function.
+     *            Typical use case will be set specific catalog/schema.
+     */
+    public static void addPreGetConnectionStatement(String sql) {
+        INSTANCE.preGetConnectionStatements.add(sql);
+    }
+
+    /**
+     *
+     * @param sql removes a sql which are to be executed when getConnection() is invoked.
+     */
+    public static void removePreGetConnectionStatement(String sql) {
+        INSTANCE.preGetConnectionStatements.remove(sql);
     }
 }

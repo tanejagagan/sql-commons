@@ -209,10 +209,10 @@ public class Transformations {
     }
 
     /**
-     * a < 10
-     * a <= 10
-     * 10 > a
-     * 10 >=a
+     * a &lt; 10
+     * a &lt;= 10
+     * 10 &gt; a
+     * 10 &gt;=a
      * a = 10
      * 10 = a
      */
@@ -229,10 +229,10 @@ public class Transformations {
 
 
     /**
-     * a > 10
-     * a >= 10
-     * 10 < a
-     * 10 <= a
+     * a &gt; 10
+     * a &gt;= 10
+     * 10 &lt; a
+     * 10 &lt;= a
      * a = 10
      * 10 = a
      */
@@ -249,7 +249,7 @@ public class Transformations {
 
 
     /**
-     *  if(max_a=null, true, cast(max_a as int) >= cast(x as int)
+     *  if(max_a=null, true, cast(max_a as int) &gt;= cast(x as int)
      **/
     public static JsonNode constructUpperBoundPredicate(String[] col, JsonNode literal, String datatype) {
         JsonNode nullNode = ExpressionFactory.constant(null);
@@ -261,7 +261,7 @@ public class Transformations {
     }
 
     /**
-     *  if(min_a=null, true, cast(min_a as int) <= cast(x as int)
+     *  if(min_a=null, true, cast(min_a as int) &lt;= cast(x as int)
      **/
     public static JsonNode constructLowerBoundPredicate(String[] col, JsonNode literal, String datatype) {
         JsonNode nullNode = ExpressionFactory.constant(null);
