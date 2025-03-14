@@ -30,12 +30,12 @@ import java.util.stream.Collectors;
 
 public class HivePartitionPruning extends PartitionPruning {
 
-    private static final String READ_PARTITION_BLOB_SQL = "SELECT size, filename, list_transform(parse_path(substring(filename, len('%s') + 2))[1:%s], x -> split_part(x, '=', 2)) as partitions " +
+    private static final String READ_PARTITION_BLOB_SQL = "SELECT filename, size, epoch_ms(last_modified) as last_modified, list_transform(parse_path(substring(filename, len('%s') + 2))[1:%s], x -> split_part(x, '=', 2)) as partitions " +
             "FROM read_blob('%s')";
     private static final String PARTITION_SQL = "WITH A AS (SELECT * FROM %s)," +
-            " B AS (SELECT size, filename, %s FROM A )" +
+            " B AS (SELECT filename, size, last_modified, %s FROM A )" +
             " SELECT * FROM B where %s";
-    private static final String READ_BLOB_NO_PARTITION_SQL = "SELECT size, filename FROM read_blob('%s')";
+    private static final String READ_BLOB_NO_PARTITION_SQL = "SELECT filename, size, epoch_ms(last_modified) as last_modified FROM read_blob('%s')";
 
     private static final Field UNSCAPE_PARTITION_FIELD =
             new Field("unescaped_partitions", FieldType.notNullable(new ArrowType.List()),
@@ -116,32 +116,32 @@ public class HivePartitionPruning extends PartitionPruning {
      *                      Final Sql looks something like `select size, filename, cast(unescape_partitions[1] as date) as dt, ....from temp table where dt = ?
      *                      4. Remove all the filter which do not have partition columns
      */
-    public static List<FileNameAndSize> pruneFiles(String basePath,
-                                                   String filter,
-                                                   String[][] partitionDataTypes) throws SQLException, IOException {
+    public static List<FileStatus> pruneFiles(String basePath,
+                                              String filter,
+                                              String[][] partitionDataTypes) throws SQLException, IOException {
         if (partitionDataTypes == null || partitionDataTypes.length == 0) {
             return pruneFilesNoPartition(basePath);
         }
         String firstSql = getQueryString(basePath, partitionDataTypes.length);
         String tempTableName = "connection_temp_table_" + System.currentTimeMillis();
-        List<FileNameAndSize> result = new ArrayList<>();
+        List<FileStatus> result = new ArrayList<>();
         try (DuckDBConnection readConnection = ConnectionPool.getConnection()) {
             String partitionSql = HivePartitionPruning.getPartitionSql(partitionDataTypes, tempTableName, filter);
             String transformed = doQueryTransformation(readConnection, partitionSql,
                     Arrays.stream(partitionDataTypes).map(ss -> ss[0]).collect(Collectors.toSet()));
             try (DuckDBConnection writeConnection = ConnectionPool.getConnection();
                  BufferAllocator allocator = new RootAllocator();
-                 BufferAllocator allocator1 = new RootAllocator();
-                 ArrowReader reader1 = ConnectionPool.getReader(readConnection, allocator.newChildAllocator("dd1", 0, Long.MAX_VALUE), firstSql, 1000);
-                 Closeable ignored = ConnectionPool.createTempTable(writeConnection, allocator.newChildAllocator("mm", 0, Long.MAX_VALUE), reader1,
+                 ArrowReader reader1 = ConnectionPool.getReader(readConnection, allocator, firstSql, 1000);
+                 Closeable ignored = ConnectionPool.createTempTable(writeConnection, allocator, reader1,
                          UNESCAPE_FN, List.of("partitions"), UNSCAPE_PARTITION_FIELD, tempTableName);
-                 ArrowReader reader2 = ConnectionPool.getReader(writeConnection, allocator1.newChildAllocator("mm3", 0, Long.MAX_VALUE), transformed, 100)) {
+                 ArrowReader reader2 = ConnectionPool.getReader(writeConnection, allocator, transformed, 100)) {
                 while (reader2.loadNextBatch()) {
                     VectorSchemaRoot root = reader2.getVectorSchemaRoot();
                     VarCharVector filename = (VarCharVector) root.getVector("filename");
                     BigIntVector size = (BigIntVector) root.getVector("size");
+                    BigIntVector lastModifier = (BigIntVector) root.getVector("last_modified");
                     for (int i = 0; i < root.getRowCount(); i++) {
-                        result.add(new FileNameAndSize(new String(filename.get(i)), size.get(i)));
+                        result.add(new FileStatus(new String(filename.get(i)), size.get(i), lastModifier.get(i)));
                     }
                 }
             }
@@ -149,9 +149,9 @@ public class HivePartitionPruning extends PartitionPruning {
         }
     }
 
-    private static List<FileNameAndSize> pruneFilesNoPartition(String basePath) throws SQLException, IOException {
+    private static List<FileStatus> pruneFilesNoPartition(String basePath) throws SQLException, IOException {
         String sql = String.format(READ_BLOB_NO_PARTITION_SQL, basePath + "/*.parquet");
-        List<FileNameAndSize> result = new ArrayList<>();
+        List<FileStatus> result = new ArrayList<>();
         try(DuckDBConnection connection = ConnectionPool.getConnection();
             BufferAllocator allocator = new RootAllocator();
             ArrowReader reader = ConnectionPool.getReader(connection, allocator, sql, 1000)){
@@ -159,8 +159,9 @@ public class HivePartitionPruning extends PartitionPruning {
                 VectorSchemaRoot root = reader.getVectorSchemaRoot();
                 VarCharVector filename = (VarCharVector) root.getVector("filename");
                 BigIntVector size = (BigIntVector) root.getVector("size");
+                BigIntVector lastModifier = (BigIntVector) root.getVector("last_modified");
                 for (int i = 0; i < root.getRowCount(); i++) {
-                    result.add(new FileNameAndSize(new String(filename.get(i)), size.get(i)));
+                    result.add(new FileStatus(new String(filename.get(i)), size.get(i), lastModifier.get(i)));
                 }
             }
         }
@@ -169,8 +170,6 @@ public class HivePartitionPruning extends PartitionPruning {
 
     protected static String getQueryString(String basePath,
                                          int partitionsLen) {
-        int partitionStart = getPartitionStart(basePath);
-        int partitionEnd = partitionStart + partitionsLen - 1;
         String readBlobPath = getReadBlobPath(basePath, partitionsLen, "parquet");
         return String.format(READ_PARTITION_BLOB_SQL, basePath, partitionsLen, readBlobPath);
     }

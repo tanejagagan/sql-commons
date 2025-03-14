@@ -90,7 +90,7 @@ public class HivePartitionPruningTest {
     }
 
     private static void assertSize(int expectedSize, String basePath, String filter, String[][] partition) throws SQLException, IOException {
-        List<FileNameAndSize> result = HivePartitionPruning.pruneFiles(basePath, filter, partition);
+        List<FileStatus> result = HivePartitionPruning.pruneFiles(basePath, filter, partition);
         assertEquals(expectedSize, result.size(), result.stream().map(Record::toString).collect(Collectors.joining(",")));
     }
 

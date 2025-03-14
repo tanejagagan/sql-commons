@@ -51,7 +51,7 @@ public class MappedReaderTest {
 
     @Test
     public void testMapReaderArray() throws SQLException, IOException {
-        String sql = "select 10 as size, 'abc' as filename, ['a%20x', 'b'] as partitions";
+        String sql = "select 10 as size, 'abc' as filename, 99 as last_modified, ['a%20x', 'b'] as partitions  ";
         Field child = new Field("children", FieldType.notNullable(new ArrowType.Utf8()), null);
         List<String> sourceCol = List.of("partitions");
         Field targetField = new Field("unescaped_partitions", FieldType.notNullable(new ArrowType.List()), List.of(child));
@@ -62,7 +62,7 @@ public class MappedReaderTest {
         String temptableName = "tt";
         String testSql = HivePartitionPruning.getPartitionSql(partitions, temptableName, "true");
         DuckDBTestUtil.testMappedReader(sql, HivePartitionPruning.UNESCAPE_FN, sourceCol, targetField, temptableName,
-                testSql, "select 10 as size, 'abc' as filename, 'a x' as a, 'b' as b");
+                testSql, "select 'abc' as filename, 10 as size,  99 as last_modified, 'a x' as a, 'b' as b");
     }
 
     @Test
