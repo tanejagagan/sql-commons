@@ -15,10 +15,11 @@ import java.util.List;
 public class MappedReader extends ArrowReader {
 
     private final Field newField;
-    Function function;
-    ArrowReader internal;
-    Schema schema;
-    List<String> inputColumns;
+    private final Function function;
+    private final ArrowReader internal;
+    private final Schema schema;
+    private final List<String> inputColumns;
+
     public MappedReader(BufferAllocator bufferAllocator,
                         ArrowReader reader,
                         Function function,
@@ -29,12 +30,13 @@ public class MappedReader extends ArrowReader {
         this.internal = reader;
         this.inputColumns = new ArrayList<>(inputColumns);
         this.newField = newField;
-        List<Field> fieldList = new ArrayList<Field>(internal.getVectorSchemaRoot().getSchema().getFields());
+        List<Field> fieldList = new ArrayList<>(internal.getVectorSchemaRoot().getSchema().getFields());
         fieldList.add(newField);
         this.schema = new Schema(fieldList);
     }
 
-    public static void copy(VectorSchemaRoot originalRoot, VectorSchemaRoot targetRoot) {
+    public static void copy(VectorSchemaRoot originalRoot,
+                            VectorSchemaRoot targetRoot) {
         List<TransferPair> transferPairs = new ArrayList<>();
         for (FieldVector vector : originalRoot.getFieldVectors()) {
             TransferPair transferPair = vector.makeTransferPair(targetRoot.getVector(vector.getName()));
@@ -47,15 +49,10 @@ public class MappedReader extends ArrowReader {
         originalRoot.close();
     }
 
-    public static void copy(FieldVector source, FieldVector target) {
-        TransferPair transferPair = source.makeTransferPair(target);
-        transferPair.transfer();
-        target.setValueCount(source.getValueCount());
-    }
 
     @Override
     public boolean loadNextBatch() throws IOException {
-        if (internal.loadNextBatch()) {
+        if(internal.loadNextBatch()) {
             VectorSchemaRoot internalRoot = internal.getVectorSchemaRoot();
             VectorSchemaRoot root = getVectorSchemaRoot();
             copy(internalRoot, root);
@@ -83,6 +80,12 @@ public class MappedReader extends ArrowReader {
     protected Schema readSchema() throws IOException {
         return schema;
     }
+
+    @Override
+    public synchronized void close() throws IOException {
+        super.close();
+    }
+
 
     public static interface Function {
         void apply(List<FieldVector> source, FieldVector target);

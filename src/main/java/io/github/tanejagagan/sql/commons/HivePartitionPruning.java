@@ -30,11 +30,12 @@ import java.util.stream.Collectors;
 
 public class HivePartitionPruning extends PartitionPruning {
 
-    private static final String READ_TEXT_SQL = "SELECT size, filename, list_transform(parse_path(filename)[%s:%s], x -> split_part(x, '=', 2)) as partitions " +
+    private static final String READ_PARTITION_BLOB_SQL = "SELECT size, filename, list_transform(parse_path(substring(filename, len('%s') + 2))[1:%s], x -> split_part(x, '=', 2)) as partitions " +
             "FROM read_blob('%s')";
     private static final String PARTITION_SQL = "WITH A AS (SELECT * FROM %s)," +
             " B AS (SELECT size, filename, %s FROM A )" +
             " SELECT * FROM B where %s";
+    private static final String READ_BLOB_NO_PARTITION_SQL = "SELECT size, filename FROM read_blob('%s')";
 
     private static final Field UNSCAPE_PARTITION_FIELD =
             new Field("unescaped_partitions", FieldType.notNullable(new ArrowType.List()),
@@ -60,8 +61,12 @@ public class HivePartitionPruning extends PartitionPruning {
     };
 
     protected static String getPartitionSql(String[][] dataTypes,
-                                          String tempTableName,
-                                          String filter) {
+                                            String tempTableName,
+                                            String filter) {
+        String filterToApply = filter;
+        if(filter ==null || filter.isBlank()) {
+            filterToApply = "true";
+        }
         StringBuilder stringBuilder = new StringBuilder();
         for (int i = 0; i < dataTypes.length; i++) {
             String[] ss = dataTypes[i];
@@ -70,7 +75,7 @@ public class HivePartitionPruning extends PartitionPruning {
             stringBuilder.append(",");
         }
         stringBuilder.deleteCharAt(stringBuilder.length() - 1);
-        return String.format(PARTITION_SQL, tempTableName, stringBuilder, filter);
+        return String.format(PARTITION_SQL, tempTableName, stringBuilder, filterToApply);
     }
 
     public static void main(String[] args) throws SQLException, JsonProcessingException {
@@ -114,26 +119,48 @@ public class HivePartitionPruning extends PartitionPruning {
     public static List<FileNameAndSize> pruneFiles(String basePath,
                                                    String filter,
                                                    String[][] partitionDataTypes) throws SQLException, IOException {
+        if (partitionDataTypes == null || partitionDataTypes.length == 0) {
+            return pruneFilesNoPartition(basePath);
+        }
         String firstSql = getQueryString(basePath, partitionDataTypes.length);
-        String tempTableName = "temp_table";
+        String tempTableName = "connection_temp_table_" + System.currentTimeMillis();
         List<FileNameAndSize> result = new ArrayList<>();
-        try (DuckDBConnection connection = ConnectionPool.getConnection();
-             BufferAllocator allocator = new RootAllocator();
-             ArrowReader reader = ConnectionPool.getReader(connection, allocator, firstSql, 1000);
-             Closeable ignored = ConnectionPool.createTempTable(connection, allocator, reader,
-                     UNESCAPE_FN, List.of("partitions"), UNSCAPE_PARTITION_FIELD, tempTableName)) {
-            String x = HivePartitionPruning.getPartitionSql(partitionDataTypes, tempTableName, filter);
-            String transformed = doQueryTransformation(connection, x,
+        try (DuckDBConnection readConnection = ConnectionPool.getConnection()) {
+            String partitionSql = HivePartitionPruning.getPartitionSql(partitionDataTypes, tempTableName, filter);
+            String transformed = doQueryTransformation(readConnection, partitionSql,
                     Arrays.stream(partitionDataTypes).map(ss -> ss[0]).collect(Collectors.toSet()));
-
-            try (ArrowReader reader1 = ConnectionPool.getReader(connection, allocator, transformed, 100)) {
-                while (reader1.loadNextBatch()) {
-                    VectorSchemaRoot root = reader1.getVectorSchemaRoot();
+            try (DuckDBConnection writeConnection = ConnectionPool.getConnection();
+                 BufferAllocator allocator = new RootAllocator();
+                 BufferAllocator allocator1 = new RootAllocator();
+                 ArrowReader reader1 = ConnectionPool.getReader(readConnection, allocator.newChildAllocator("dd1", 0, Long.MAX_VALUE), firstSql, 1000);
+                 Closeable ignored = ConnectionPool.createTempTable(writeConnection, allocator.newChildAllocator("mm", 0, Long.MAX_VALUE), reader1,
+                         UNESCAPE_FN, List.of("partitions"), UNSCAPE_PARTITION_FIELD, tempTableName);
+                 ArrowReader reader2 = ConnectionPool.getReader(writeConnection, allocator1.newChildAllocator("mm3", 0, Long.MAX_VALUE), transformed, 100)) {
+                while (reader2.loadNextBatch()) {
+                    VectorSchemaRoot root = reader2.getVectorSchemaRoot();
                     VarCharVector filename = (VarCharVector) root.getVector("filename");
                     BigIntVector size = (BigIntVector) root.getVector("size");
                     for (int i = 0; i < root.getRowCount(); i++) {
                         result.add(new FileNameAndSize(new String(filename.get(i)), size.get(i)));
                     }
+                }
+            }
+            return result;
+        }
+    }
+
+    private static List<FileNameAndSize> pruneFilesNoPartition(String basePath) throws SQLException, IOException {
+        String sql = String.format(READ_BLOB_NO_PARTITION_SQL, basePath + "/*.parquet");
+        List<FileNameAndSize> result = new ArrayList<>();
+        try(DuckDBConnection connection = ConnectionPool.getConnection();
+            BufferAllocator allocator = new RootAllocator();
+            ArrowReader reader = ConnectionPool.getReader(connection, allocator, sql, 1000)){
+            while (reader.loadNextBatch()) {
+                VectorSchemaRoot root = reader.getVectorSchemaRoot();
+                VarCharVector filename = (VarCharVector) root.getVector("filename");
+                BigIntVector size = (BigIntVector) root.getVector("size");
+                for (int i = 0; i < root.getRowCount(); i++) {
+                    result.add(new FileNameAndSize(new String(filename.get(i)), size.get(i)));
                 }
             }
         }
@@ -145,7 +172,7 @@ public class HivePartitionPruning extends PartitionPruning {
         int partitionStart = getPartitionStart(basePath);
         int partitionEnd = partitionStart + partitionsLen - 1;
         String readBlobPath = getReadBlobPath(basePath, partitionsLen, "parquet");
-        return String.format(READ_TEXT_SQL, partitionStart, partitionEnd, readBlobPath);
+        return String.format(READ_PARTITION_BLOB_SQL, basePath, partitionsLen, readBlobPath);
     }
 
     private static String getReadBlobPath(String basePath, int partitionsLen, String format) {

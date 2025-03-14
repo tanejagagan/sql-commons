@@ -1,27 +1,73 @@
 package io.github.tanejagagan.sql.commons;
 
 
+import io.minio.MakeBucketArgs;
+import io.minio.MinioClient;
+import io.minio.errors.*;
+import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.memory.RootAllocator;
-import org.apache.arrow.vector.IntVector;
-import org.apache.arrow.vector.VectorSchemaRoot;
 import org.apache.arrow.vector.ipc.ArrowReader;
-import org.apache.arrow.vector.types.pojo.ArrowType;
-import org.apache.arrow.vector.types.pojo.Field;
-import org.apache.arrow.vector.types.pojo.FieldType;
 import org.duckdb.DuckDBConnection;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.testcontainers.containers.MinIOContainer;
+import org.testcontainers.containers.Network;
 
-import java.io.Closeable;
 import java.io.IOException;
+import java.net.URI;
+import java.security.InvalidKeyException;
+import java.security.NoSuchAlgorithmException;
 import java.sql.SQLException;
 import java.util.List;
+import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class HivePartitionPruningTest {
 
-    String basePath = "example/hive_table";
-    String[][] partition = {{"dt", "date"}, {"p", "string"}};
+    static final String basePath = "example/hive_table";
+    static final String[][] partition = {{"dt", "date"}, {"p", "string"}};
+    public static final String CREATE_SECRET_SQL =  "CREATE SECRET %s ( %s )";
+    public static final String INSERT_STATEMENT = "COPY " +
+            "    (FROM generate_series(10)) " +
+            "    TO '%s' " +
+            "    (FORMAT parquet)";
+
+
+    public static Network network = Network.newNetwork();
+    public static MinIOContainer minio =
+            MinioContainerTestUtil.createContainer("minio", network);
+    public static MinioClient minioClient;
+
+
+    @BeforeAll
+    public static void setup() throws IOException, ServerException, InsufficientDataException, ErrorResponseException, NoSuchAlgorithmException, InvalidKeyException, InvalidResponseException, XmlParserException, InternalException, SQLException {
+        minio.start();
+        minioClient = MinioContainerTestUtil.createClient(minio);
+        minioClient.makeBucket(MakeBucketArgs.builder().bucket(MinioContainerTestUtil.TEST_BUCKET_NAME).build());
+        createDuckDBSecret();
+        insertDataUsingDuckDB();
+    }
+
+    static String quote(String input) {
+        return String.format("'%s'", input);
+    }
+    private static void createDuckDBSecret() {
+        var uri = URI.create(minio.getS3URL());
+        String param = "TYPE s3" +
+        ",KEY_ID " +  quote( minio.getUserName()) +
+                ",SECRET " +  quote(minio.getPassword()) +
+                ",ENDPOINT " +  quote (uri.getHost() + ":" + uri.getPort()) +
+                ",USE_SSL " +  "false" +
+                ",URL_STYLE " +  "path";
+       ConnectionPool.execute(String.format(CREATE_SECRET_SQL, "d", param));
+    }
+
+    private static void  insertDataUsingDuckDB() throws SQLException, IOException {
+        String path = "s3://" + MinioContainerTestUtil.TEST_BUCKET_NAME + "/hive_table/dt=2024-01-01/p=x/result.parquet";
+        ConnectionPool.execute(String.format(INSERT_STATEMENT, path));
+    }
+
 
     @Test
     public void getQueryString() throws SQLException, IOException {
@@ -32,71 +78,56 @@ public class HivePartitionPruningTest {
     }
 
     @Test
-    public void testMapReader() throws SQLException, IOException {
-        String sql = "select 1 as count";
-        MappedReader.Function function = (sources, target) -> {
-            IntVector resultVector = (IntVector) target;
-            IntVector f = (IntVector) sources.get(0);
-            for (int i = 0; i < f.getValueCount(); i++) {
-                resultVector.set(i, f.get(i) + 1);
-            }
-        };
-        Field f = new Field("count_p", FieldType.notNullable(new ArrowType.Int(32, true)), null);
-        testMapReaderInternal(sql, function, List.of("count"), f, "asdf", "select * from asdf", "select 1 as count, 2 as count_p");
+    public void testPruneFile() throws SQLException, IOException {
+        for(int i =0; i < 10; i ++) {
+            assertSize(3, basePath, "true", partition);
+        }
+        assertSize(1, basePath,"p = 'a b'", partition);
+        assertSize(2, basePath, "dt = '2025-01-01'", partition);
+        for(int i = 0 ; i < 10; i ++) {
+            assertSize(0, basePath, "dt = '2023-01-01'", partition);
+        }
+    }
+
+    private static void assertSize(int expectedSize, String basePath, String filter, String[][] partition) throws SQLException, IOException {
+        List<FileNameAndSize> result = HivePartitionPruning.pruneFiles(basePath, filter, partition);
+        assertEquals(expectedSize, result.size(), result.stream().map(Record::toString).collect(Collectors.joining(",")));
     }
 
     @Test
-    public void testMapReaderArray() throws SQLException, IOException {
-        String sql = "select 10 as size, 'abc' as filename, ['a%20x', 'b'] as partitions";
-        Field child = new Field("children", FieldType.notNullable(new ArrowType.Utf8()), null);
-        List<String> sourceCol = List.of("partitions");
-        Field targetField = new Field("unescaped_partitions", FieldType.notNullable(new ArrowType.List()), List.of(child));
-        String[][] partitions = {
-                {"a", "string"},
-                {"b", "string"}
-        };
-        String temptableName = "tt";
-        String testSql = HivePartitionPruning.getPartitionSql(partitions, temptableName, "true");
-        testMapReaderInternal(sql, HivePartitionPruning.UNESCAPE_FN, sourceCol, targetField, temptableName, testSql, "select 10 as size, 'abc' as filename, 'a x' as a, 'b' as b");
+    public void testPruneFileNoPartition() throws SQLException, IOException {
+        assertSize(1, basePath + "/dt=2024-01-01/p=x", "true", new String[0][0]);
+    }
+
+    @Test
+    public void testPruneFileS3() throws SQLException, IOException {
+        String path = "s3://" + MinioContainerTestUtil.TEST_BUCKET_NAME + "/hive_table";
+        assertSize(1, path, "true", partition);
+    }
+
+    @Test
+    public void testPruneFileS3NoPartition() throws SQLException, IOException {
+        String path = "s3://" + MinioContainerTestUtil.TEST_BUCKET_NAME + "/hive_table/dt=2024-01-01/p=x";
+        assertSize(1, path, "true", new String[0][0]);
     }
 
     @Test
     public void testReader() throws SQLException, IOException {
-        String sql = "select 1 as count";
-        try (DuckDBConnection connection = ConnectionPool.getConnection();
-             RootAllocator allocator = new RootAllocator();
-             ArrowReader reader = ConnectionPool.getReader(connection, allocator, sql, 10)) {
-            VectorSchemaRoot root = reader.getVectorSchemaRoot();
-            while (reader.loadNextBatch()) {
-                root.contentToTSVString();
+        for (int i = 0; i < 1000; i++) {
+            try(BufferAllocator allocator = new RootAllocator();
+                DuckDBConnection connection = ConnectionPool.getConnection();
+                ArrowReader reader = ConnectionPool.getReader(connection, allocator, "select * from (select 1 as one)", 1000)) {
+                while (reader.loadNextBatch()) {
+                    reader.getVectorSchemaRoot();
+                }
             }
         }
     }
 
     @Test
-    public void testPruneFile() throws SQLException, IOException {
-        HivePartitionPruning.pruneFiles(basePath, "p = 'a b'", partition);
-        HivePartitionPruning.pruneFiles(basePath, "dt = '2024-01-01'", partition);
-    }
+    public void testWriter() {
 
-    private void testMapReaderInternal(String sql,
-                                       MappedReader.Function function,
-                                       List<String> sourceCol,
-                                       Field targetField,
-                                       String tempTableName,
-                                       String testSql,
-                                       String expectedSql) throws SQLException, IOException {
-        try (DuckDBConnection connection = ConnectionPool.getConnection();
-             RootAllocator allocator = new RootAllocator();
-             ArrowReader reader = ConnectionPool.getReader(connection, allocator, sql, 10);
-             Closeable ignored = ConnectionPool.createTempTable(connection, allocator, reader, function, sourceCol, targetField, tempTableName)) {
-            // the issue with temp tables for now are that they can be only be queries once since it reads the reader once.
-            // It does not work even for queries such as `select * from a union select * from a` because it will require reader to be read twice.
-            // Therefor we need to store the data of reader into materialized view so that it can be used multiple time
-            String materializedTable = tempTableName + "_mat";
-            ConnectionPool.execute(connection, String.format("CREATE TABLE %s AS SELECT * FROM %s", materializedTable, tempTableName));
-            DuckDBTestUtil.isEqual(connection, allocator, testSql.replaceAll(tempTableName, materializedTable), expectedSql);
-        }
     }
 }
+
 

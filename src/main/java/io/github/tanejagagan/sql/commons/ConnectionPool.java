@@ -4,11 +4,13 @@ import org.apache.arrow.c.ArrowArrayStream;
 import org.apache.arrow.c.Data;
 import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.memory.RootAllocator;
+import org.apache.arrow.util.AutoCloseables;
 import org.apache.arrow.vector.VectorSchemaRoot;
 import org.apache.arrow.vector.ipc.ArrowReader;
 import org.apache.arrow.vector.types.pojo.Field;
 import org.apache.arrow.vector.types.pojo.Schema;
 import org.duckdb.DuckDBConnection;
+import org.duckdb.DuckDBDriver;
 import org.duckdb.DuckDBResultSet;
 
 import java.io.Closeable;
@@ -16,6 +18,7 @@ import java.io.IOException;
 import java.sql.*;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Properties;
 
 public enum ConnectionPool {
     INSTANCE;
@@ -26,8 +29,11 @@ public enum ConnectionPool {
 
     ConnectionPool() {
         try {
-            this.connection = (DuckDBConnection) DriverManager.getConnection("jdbc:duckdb:");
-        } catch (SQLException e) {
+            Class.forName("org.duckdb.DuckDBDriver");
+            Properties props = new Properties();
+            props.setProperty(DuckDBDriver.JDBC_STREAM_RESULTS, String.valueOf(true));
+            this.connection = (DuckDBConnection) DriverManager.getConnection("jdbc:duckdb:", props);
+        } catch (SQLException | ClassNotFoundException e) {
             throw new RuntimeException(e);
         }
     }
@@ -39,15 +45,19 @@ public enum ConnectionPool {
      * @param tClass class of the return object
      * @return fist value of the result set
      * @param <T>
-     * @throws SQLException
      */
-    public static <T> T collectFirst(Connection connection, String sql, Class<T> tClass) throws SQLException {
-        try(Statement statement = connection.createStatement()) {
+    public static <T> T collectFirst(Connection connection, String sql, Class<T> tClass) {
+        try (Statement statement = connection.createStatement()) {
             statement.execute(sql);
             try (ResultSet resultSet = statement.getResultSet()) {
                 resultSet.next();
                 return resultSet.getObject(1, tClass);
             }
+            catch (SQLException e ){
+                throw new RuntimeException("Error collecting result set for sql " + sql, e);
+            }
+        } catch (SQLException e) {
+            throw new RuntimeException("Error running sql" + sql, e);
         }
     }
 
@@ -57,16 +67,10 @@ public enum ConnectionPool {
      * @param tClass
      * @return
      * @param <T>
-     * @throws SQLException
      */
     public static <T> T collectFirst(String sql, Class<T> tClass) throws SQLException {
-        try (Connection connection = getConnection();
-             Statement statement = connection.createStatement()) {
-            statement.execute(sql);
-            try (ResultSet resultSet = statement.getResultSet()) {
-                resultSet.next();
-                return resultSet.getObject(1, tClass);
-            }
+        try (DuckDBConnection connection = getConnection()) {
+            return collectFirst(connection, sql, tClass);
         }
     }
 
@@ -132,16 +136,16 @@ public enum ConnectionPool {
                                             List<String> sourceColumns,
                                             Field targetField,
                                             String tableName) throws IOException {
-        ArrowReader mappedReader = new MappedReader(allocator, reader, function, sourceColumns,
+        ArrowReader mappedReader = new MappedReader(allocator.newChildAllocator("mmmm", 0, Long.MAX_VALUE), reader, function, sourceColumns,
                 targetField);
         final ArrowArrayStream arrow_array_stream = ArrowArrayStream.allocateNew(allocator);
         Data.exportArrayStream(allocator, mappedReader, arrow_array_stream);
         connection.registerArrowStream(tableName, arrow_array_stream);
-        return new Closeable() {
-            @Override
-            public void close() throws IOException {
-                mappedReader.close();
-                arrow_array_stream.close();
+        return () -> {
+            try {
+                AutoCloseables.close(mappedReader, arrow_array_stream);
+            } catch (Exception e) {
+                throw new RuntimeException(e);
             }
         };
     }
@@ -150,11 +154,24 @@ public enum ConnectionPool {
      *
      * @param connection
      * @param sql
-     * @throws SQLException
      */
-    public static void execute(Connection connection, String sql) throws SQLException {
+    public static void execute(Connection connection, String sql)  {
         try(Statement statement = connection.createStatement()) {
             statement.execute(sql);
+        } catch (SQLException e) {
+            throw new RuntimeException("Error running sql :" + sql,  e);
+        }
+    }
+
+    /**
+     * @param sql
+     */
+    public static void execute(String sql)  {
+        try(Connection connection = ConnectionPool.getConnection();
+            Statement statement = connection.createStatement()) {
+            statement.execute(sql);
+        } catch (SQLException e) {
+            throw new RuntimeException("Error running sql :" + sql,  e);
         }
     }
 
@@ -165,61 +182,68 @@ public enum ConnectionPool {
      * @param sql
      * @param batchSize
      * @return
-     * @throws SQLException
      */
     public static ArrowReader getReader(DuckDBConnection connection,
-                                        BufferAllocator allocator,  String sql, int batchSize) throws SQLException {
-        final Statement statement = connection.createStatement();
-        statement.execute(sql);
-        return new ArrowReader(allocator) {
-            final Statement _statement = statement;
-            final DuckDBResultSet resultSet = (DuckDBResultSet) statement.getResultSet();
-            private final ArrowReader internal = (ArrowReader) resultSet.arrowExportStream(allocator, batchSize);
-            @Override
-            public boolean loadNextBatch() throws IOException {
-                return internal.loadNextBatch();
-            }
+                                        BufferAllocator allocator,  String sql, int batchSize)  {
+        try {
+            final Statement statement = connection.createStatement();
+            statement.execute(sql);
+            return new ArrowReader(allocator) {
+                final Statement _statement = statement;
+                final DuckDBResultSet resultSet = (DuckDBResultSet) statement.getResultSet();
+                private final ArrowReader internal = (ArrowReader) resultSet.arrowExportStream(allocator, batchSize);
 
-            @Override
-            public long bytesRead() {
-                return internal.bytesRead();
-            }
-
-            @Override
-            protected void closeReadSource() throws IOException {
-                internal.close();
-                try {
-                    resultSet.close();
-                    _statement.close();
-                } catch (SQLException e) {
-                    throw new RuntimeException(e);
+                @Override
+                public boolean loadNextBatch() throws IOException {
+                    return internal.loadNextBatch();
                 }
-            }
 
-            @Override
-            protected Schema readSchema() throws IOException {
-                return internal.getVectorSchemaRoot().getSchema();
-            }
+                @Override
+                public long bytesRead() {
+                    return internal.bytesRead();
+                }
 
-            @Override
-            public VectorSchemaRoot getVectorSchemaRoot() throws IOException {
-                return internal.getVectorSchemaRoot();
-            }
-        };
+                @Override
+                protected void closeReadSource() throws IOException {
+                    internal.close();
+                    try {
+                        resultSet.close();
+                        _statement.close();
+                    } catch (SQLException e) {
+                        throw new RuntimeException(e);
+                    }
+                }
+
+                @Override
+                protected Schema readSchema() throws IOException {
+                    return internal.getVectorSchemaRoot().getSchema();
+                }
+
+                @Override
+                public VectorSchemaRoot getVectorSchemaRoot() throws IOException {
+                    return internal.getVectorSchemaRoot();
+                }
+            };
+        } catch (SQLException e ) {
+            throw new RuntimeException(e);
+        }
     }
 
-    public static DuckDBConnection getConnection() throws SQLException {
+    public static DuckDBConnection getConnection()  {
         return INSTANCE.getConnectionInternal();
     }
 
-    public DuckDBConnection getConnectionInternal() throws SQLException {
-        DuckDBConnection result = (DuckDBConnection) connection.duplicate();
-        try (Statement statement = result.createStatement()) {
+    private DuckDBConnection getConnectionInternal() {
+        try {
+            DuckDBConnection result = (DuckDBConnection) connection.duplicate();
+            Statement statement = result.createStatement();
             for (String sql : preGetConnectionStatements) {
                 statement.execute(sql);
             }
+            return result;
+        } catch (SQLException e ){
+            throw new RuntimeException("Error creating connection " , e);
         }
-        return result;
     }
 
     /**
