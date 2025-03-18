@@ -30,12 +30,19 @@ public class Transformations {
             COLUMN_REF_TYPE);
     public static final Function<JsonNode, Boolean> IS_CONJUNCTION_AND = isClassAndType(CONJUNCTION_CLASS,
             CONJUNCTION_TYPE_AND);
+
+    public static final Function<JsonNode, Boolean> IS_CAST = isClassAndType(CAST_CLASS, CAST_TYPE_OPERATOR);
+
     public static final Function<JsonNode, Boolean> IS_EMPTY_CONJUNCTION_AND = n -> {
         if (!IS_CONJUNCTION_AND.apply(n)) {
             return false;
         }
         JsonNode children = n.get("children");
         return children == null || children.isEmpty();
+    };
+
+    public static final Function<JsonNode, Boolean> IS_REFERENCE_CAST = node -> {
+        return IS_CAST.apply(node) && node.get("child") !=null && IS_REFERENCE.apply(node.get("child"));
     };
 
     public static final Function<JsonNode, Boolean> IS_SELECT = isType(SELECT_NODE_TYPE);
@@ -367,6 +374,13 @@ public class Transformations {
             collectFn.accept(node);
             return;
         }
+        if(node instanceof ArrayNode arrayNode) {
+            for (Iterator<JsonNode> it = arrayNode.elements(); it.hasNext(); ) {
+                JsonNode elem = it.next();
+                find(elem, matchFn, collectFn);
+            }
+            return;
+        }
         Iterable<JsonNode> children = getChildren(node);
         for (JsonNode c : children) {
             find(c, matchFn, collectFn);
@@ -377,6 +391,11 @@ public class Transformations {
         JsonNode children = node.get("children");
         if (children != null) {
             return children;
+        }
+        JsonNode child = node.get("child");
+
+        if(child != null) {
+            return List.of(child);
         }
         JsonNode left = node.get("left");
         JsonNode right = node.get("right");
@@ -407,6 +426,12 @@ public class Transformations {
     public static String parseToSql(JsonNode node) throws SQLException {
         String sql = String.format(JSON_DESERIALIZE_SQL, node.toString());
         return ConnectionPool.collectFirst(sql, String.class);
+    }
+
+    public static List<JsonNode> collectReferencesWithCast(JsonNode tree) {
+        ArrayList<JsonNode> result = new ArrayList<>();
+        find(tree, IS_REFERENCE_CAST, result::add);
+        return result;
     }
 
     private static String escapeSpecialChar(String sql) {

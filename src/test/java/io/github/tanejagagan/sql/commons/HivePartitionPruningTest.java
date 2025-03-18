@@ -112,6 +112,12 @@ public class HivePartitionPruningTest {
     }
 
     @Test
+    public void testCast() throws SQLException, IOException {
+       String filter = "CAST(\"dt\" as DATE) IS NOT NULL AND CAST(\"dt\" as DATE) = '2025-01-01'";
+       assertSize(2, basePath, filter, partition);
+    }
+
+    @Test
     public void testReader() throws SQLException, IOException {
         for (int i = 0; i < 1000; i++) {
             try(BufferAllocator allocator = new RootAllocator();
