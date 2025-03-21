@@ -154,24 +154,44 @@ public enum ConnectionPool {
      *
      * @param connection
      * @param sql
+     * @return
      */
-    public static void execute(Connection connection, String sql)  {
+    public static boolean execute(Connection connection, String sql)  {
         try(Statement statement = connection.createStatement()) {
-            statement.execute(sql);
+            return statement.execute(sql);
         } catch (SQLException e) {
             throw new RuntimeException("Error running sql :" + sql,  e);
         }
     }
 
     /**
+     *
      * @param sql
+     * @return
      */
-    public static void execute(String sql)  {
+    public static boolean execute(String sql)  {
         try(Connection connection = ConnectionPool.getConnection();
             Statement statement = connection.createStatement()) {
-            statement.execute(sql);
+            return statement.execute(sql);
         } catch (SQLException e) {
             throw new RuntimeException("Error running sql :" + sql,  e);
+        }
+    }
+
+    /**
+     *
+     * @param sqls
+     * @return
+     */
+    public static int[] executeBatch(String[] sqls) {
+        try(Connection connection = ConnectionPool.getConnection();
+            Statement statement = connection.createStatement()) {
+            for(String sql : sqls) {
+                statement.addBatch(sql);
+            }
+            return statement.executeBatch();
+        } catch (SQLException e) {
+            throw new RuntimeException("Error running sqls :",  e);
         }
     }
 

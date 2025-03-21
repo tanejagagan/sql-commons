@@ -315,7 +315,8 @@ public interface DataType {
         @Override
         public String toSql() {
             String fieldsString = fields.stream()
-                    .map( f -> String.format("%s %s", f.name, f.dataType.toSql()))
+                    .map( f -> String.format("%s %s", quoteIdentifier(f.name),
+                            f.dataType.toSql()))
                     .collect(Collectors.joining(","));
             return String.format("STRUCT(%s)", fieldsString);
         }
@@ -324,7 +325,6 @@ public interface DataType {
         public String toString(){
             return toSql();
         }
-
 
         @Override
         public boolean equals(Object obj) {
@@ -349,6 +349,10 @@ public interface DataType {
                 }
             }
             return false;
+        }
+
+        private String quoteIdentifier(String identifier) {
+            return String.format("\"%s\"", identifier);
         }
     }
     
