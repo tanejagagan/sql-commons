@@ -87,8 +87,8 @@ public class HivePartitionPruning extends PartitionPruning {
         for (String sql : List.of(sql0, sql1, sql2, sql4, sql5)) {
             try (Connection connection = ConnectionPool.getConnection()) {
                 String transformed = doQueryTransformation(connection, sql, Set.of("p1"));
-                System.out.printf("SQL : %s \n", sql);
-                System.out.printf("Transformed SQL : %s", transformed);
+                System.out.printf("SQL : %s, ", sql);
+                System.out.printf("Transformed SQL : %s\n", transformed);
             }
         }
     }
@@ -149,6 +149,14 @@ public class HivePartitionPruning extends PartitionPruning {
         }
     }
 
+    /**
+     * Retrieves all files from a specified not partitioned directory path and returns their names and sizes.
+     *
+     * @param basePath The directory path where files are stored, expected to contain .parquet files.
+     * @return A list of FileNameAndSize objects, each containing the name and size of a file.
+     * @throws SQLException If there is an SQL error during the query execution.
+     * @throws IOException If there is an I/O error during the handling of file data.
+     */
     private static List<FileNameAndSize> pruneFilesNoPartition(String basePath) throws SQLException, IOException {
         String sql = String.format(READ_BLOB_NO_PARTITION_SQL, basePath + "/*.parquet");
         List<FileNameAndSize> result = new ArrayList<>();
@@ -167,6 +175,14 @@ public class HivePartitionPruning extends PartitionPruning {
         return result;
     }
 
+    /**
+     * Generates a SQL query to read partition metadata (size and partition info) from files in a specified path.
+     * This query is used to initially extract size(int64), filename(varchar), and partition information(varchar[]) before further processing.
+     *
+     * @param basePath The base directory containing partitioned parquet files.
+     * @param partitionsLen The number of partition levels in the directory structure.
+     * @return A SQL query string to read partition data.
+     */
     protected static String getQueryString(String basePath,
                                          int partitionsLen) {
         int partitionStart = getPartitionStart(basePath);

@@ -37,6 +37,8 @@
         <junit.version>5.8.1</junit.version>
         <slf4j.version>2.0.16</slf4j.version>
         <testcontainer.version>1.20.4</testcontainer.version>
+        <hadoop.version>3.3.1</hadoop.version>
+        <delta-kernel.version>3.3.0</delta-kernel.version>
     </properties>
     <dependencies>
         <dependency>
@@ -81,6 +83,41 @@
             <groupId>io.minio</groupId>
             <artifactId>minio</artifactId>
             <version>8.5.11</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.delta</groupId>
+            <artifactId>delta-kernel-api</artifactId>
+            <version>${delta-kernel.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>io.delta</groupId>
+            <artifactId>delta-kernel-defaults</artifactId>
+            <version>${delta-kernel.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>io.delta</groupId>
+            <artifactId>delta-storage</artifactId>
+            <version>${delta-kernel.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>org.apache.hadoop</groupId>
+            <artifactId>hadoop-client-runtime</artifactId>
+            <version>${hadoop.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>org.apache.hadoop</groupId>
+            <artifactId>hadoop-client-api</artifactId>
+            <version>${hadoop.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.testng</groupId>
+            <artifactId>testng</artifactId>
+            <version>7.11.0</version>
             <scope>test</scope>
         </dependency>
     </dependencies>
