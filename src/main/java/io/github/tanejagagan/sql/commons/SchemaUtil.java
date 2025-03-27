@@ -3,6 +3,7 @@ package io.github.tanejagagan.sql.commons;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ArrayNode;
+import io.github.tanejagagan.sql.commons.types.DataType;
 
 import java.sql.SQLException;
 import java.util.Iterator;

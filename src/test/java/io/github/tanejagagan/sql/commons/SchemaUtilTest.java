@@ -1,6 +1,7 @@
 package io.github.tanejagagan.sql.commons;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import io.github.tanejagagan.sql.commons.types.DataType;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 

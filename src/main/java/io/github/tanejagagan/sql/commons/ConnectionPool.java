@@ -17,10 +17,8 @@ import java.io.Closeable;
 import java.io.IOException;
 import java.sql.*;
 import java.util.ArrayList;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Properties;
-import java.util.function.Function;
 
 public enum ConnectionPool {
     INSTANCE;
@@ -29,13 +27,20 @@ public enum ConnectionPool {
 
     private final ArrayList<String> preGetConnectionStatements = new ArrayList<>();
 
-    ConnectionPool() {
+    static {
         try {
             Class.forName("org.duckdb.DuckDBDriver");
+        } catch (ClassNotFoundException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    ConnectionPool() {
+        try {
             Properties props = new Properties();
             props.setProperty(DuckDBDriver.JDBC_STREAM_RESULTS, String.valueOf(true));
             this.connection = (DuckDBConnection) DriverManager.getConnection("jdbc:duckdb:", props);
-        } catch (SQLException | ClassNotFoundException e) {
+        } catch (SQLException e) {
             throw new RuntimeException(e);
         }
     }

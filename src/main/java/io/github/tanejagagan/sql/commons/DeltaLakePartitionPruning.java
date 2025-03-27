@@ -85,7 +85,7 @@ public class DeltaLakePartitionPruning {
      * @return An Expression representing the literal value with the appropriate type
      * @throws IllegalArgumentException if the value cannot be converted to the specified type
      */
-    private static Expression createLiteralFromString(String value, DataType dataType) {
+    private static Expression createLiteralFromString(String value, io.delta.kernel.types.DataType dataType) {
         if (value == null) {
             return Literal.ofNull(dataType);
         }
@@ -230,8 +230,8 @@ public class DeltaLakePartitionPruning {
      * @return A list of FileNameAndSize objects representing the filtered Delta table files
      * @throws IOException If an I/O error occurs while accessing the Delta table
      */
-    public static List<FileNameAndSize> pruneFiles(String basePath, String filter) throws IOException {
-        List<FileNameAndSize> result = new ArrayList<>();
+    public static List<FileStatus> pruneFiles(String basePath, String filter) throws IOException {
+        List<FileStatus> result = new ArrayList<>();
 
         if (basePath == null || basePath.isEmpty()) {
             throw new IllegalArgumentException("Base path cannot be null or empty");
@@ -354,8 +354,8 @@ public class DeltaLakePartitionPruning {
     /**
      * Collects all files from a Delta table without filtering.
      */
-    private static List<FileNameAndSize> getAllTableFiles(Engine engine, Snapshot snapshot) {
-        List<FileNameAndSize> result = new ArrayList<>();
+    private static List<FileStatus> getAllTableFiles(Engine engine, Snapshot snapshot) {
+        List<FileStatus> result = new ArrayList<>();
         Scan scan = snapshot.getScanBuilder(engine).build();
         return collectMatchingFiles(engine, scan);
     }
@@ -363,8 +363,8 @@ public class DeltaLakePartitionPruning {
     /**
      * Processes a scan to collect matching files.
      */
-    private static List<FileNameAndSize> collectMatchingFiles(Engine engine, Scan scan) {
-        List<FileNameAndSize> result = new ArrayList<>();
+    private static List<FileStatus> collectMatchingFiles(Engine engine, Scan scan) {
+        List<FileStatus> result = new ArrayList<>();
 
         try (CloseableIterator<FilteredColumnarBatch> fileIter = scan.getScanFiles(engine)) {
             while (fileIter.hasNext()) {
@@ -373,7 +373,7 @@ public class DeltaLakePartitionPruning {
                     while (rowIter.hasNext()) {
                         Row row = rowIter.next();
                         FileStatus fileStatus = InternalScanFileUtils.getAddFileStatus(row);
-                        result.add(new FileNameAndSize(fileStatus.getPath(), fileStatus.getSize()));
+                        result.add(fileStatus);
                     }
                 }
             }

@@ -1,4 +1,4 @@
-package io.github.tanejagagan.sql.commons;
+package io.github.tanejagagan.sql.commons.types;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ArrayNode;

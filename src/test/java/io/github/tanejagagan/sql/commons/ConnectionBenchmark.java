@@ -1,5 +1,6 @@
 package io.github.tanejagagan.sql.commons;
 
+import io.github.tanejagagan.sql.commons.benchmark.BenchmarkUtil;
 import org.duckdb.DuckDBConnection;
 import org.duckdb.DuckDBResultSet;
 
@@ -8,7 +9,6 @@ import java.nio.file.Paths;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.sql.Statement;
-import java.util.Iterator;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -28,7 +28,7 @@ public class ConnectionBenchmark {
         if(!Files.exists(path)) {
             System.out.println("Creating dir: " + path );
             Files.createDirectories(path);
-            createBenchmarkData(benchmark, genFun, scaleFactor, outputPath);
+            BenchmarkUtil.createBenchmarkData(benchmark, genFun, scaleFactor, outputPath);
         }
 
         String sql = String.format("select count(distinct ss_customer_sk) from read_parquet('%s/store_sales.parquet')", outputPath);
@@ -91,31 +91,5 @@ public class ConnectionBenchmark {
         long end = System.currentTimeMillis();
         System.out.println("Total time :" + (end -start));
         return result;
-    }
-
-    private static void createBenchmarkData(String benchmark,
-                                            String genFun,
-                                            String scaleFactor,
-                                            String dataPathStr) throws SQLException {
-        String[] sqls = {
-                String.format("INSTALL %s", benchmark),
-                String.format("LOAD %s", benchmark),
-                String.format("CALL %s(sf = %s)", genFun, scaleFactor)
-        };
-        try (Connection connection  = ConnectionPool.getConnection()) {
-            ConnectionPool.executeBatch(connection, sqls);
-
-            // Copy data to parquet files
-            for (String table : ConnectionPool.collectFirstColumn(connection, "show tables", String.class)) {
-                copyData(connection, table,
-                        String.format("%s/%s.parquet", dataPathStr, table));
-            }
-        }
-    }
-
-    private static void copyData(Connection connection, String srcTable, String destPath) throws SQLException {
-        System.out.printf("COPYING parquet files : %s, %s%n", srcTable, destPath);
-        var sql = String.format("COPY (SELECT * FROM %s) TO '%s' (FORMAT 'parquet');", srcTable, destPath);
-        ConnectionPool.execute(connection, sql);
     }
 }

@@ -14,8 +14,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 public class DeltaLakePartitionPruningTest {
     static final String basePath = "example/delta_table";
     private static void assertSize(int expectedSize, String basePath, String filter) throws IOException {
-        List<FileNameAndSize> result = pruneFiles(basePath, filter);
-        assertEquals(expectedSize, result.size(), result.stream().map(Record::toString).collect(Collectors.joining(",")));
+        List<?> result = pruneFiles(basePath, filter);
+        assertEquals(expectedSize, result.size(), result.stream().map(Object::toString).collect(Collectors.joining(",")));
     }
 
     @Test
@@ -30,5 +30,4 @@ public class DeltaLakePartitionPruningTest {
         assertSize(1, basePath, "p=x");
         assertSize(1, basePath,"p = 'a b'");
     }
-
 }
