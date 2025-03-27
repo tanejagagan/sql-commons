@@ -17,8 +17,10 @@ import java.io.Closeable;
 import java.io.IOException;
 import java.sql.*;
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Properties;
+import java.util.function.Function;
 
 public enum ConnectionPool {
     INSTANCE;
@@ -56,6 +58,28 @@ public enum ConnectionPool {
             catch (SQLException e ){
                 throw new RuntimeException("Error collecting result set for sql " + sql, e);
             }
+        } catch (SQLException e) {
+            throw new RuntimeException("Error running sql" + sql, e);
+        }
+    }
+
+    public static <T> Iterable<T> collectFirstColumn(Connection connection, String sql, Class<T> tClass) {
+        return collectAll(connection, sql, rs -> rs.getObject(1, tClass), tClass);
+    }
+
+    public static <T> Iterable<T> collectAll(Connection connection, String sql, Extractor<T> extractor, Class<T> tClass) {
+        List<T> result = new ArrayList<>();
+        try (Statement statement = connection.createStatement()) {
+            statement.execute(sql);
+            try (ResultSet resultSet = statement.getResultSet()) {
+                while (resultSet.next()) {
+                    result.add(extractor.apply(resultSet));
+                }
+            }
+            catch (SQLException e ){
+                throw new RuntimeException("Error collecting result set for sql " + sql, e);
+            }
+            return result;
         } catch (SQLException e) {
             throw new RuntimeException("Error running sql" + sql, e);
         }
@@ -154,24 +178,55 @@ public enum ConnectionPool {
      *
      * @param connection
      * @param sql
+     * @return
      */
-    public static void execute(Connection connection, String sql)  {
+    public static boolean execute(Connection connection, String sql)  {
         try(Statement statement = connection.createStatement()) {
-            statement.execute(sql);
+            return statement.execute(sql);
         } catch (SQLException e) {
             throw new RuntimeException("Error running sql :" + sql,  e);
         }
     }
 
     /**
+     *
      * @param sql
+     * @return
      */
-    public static void execute(String sql)  {
+    public static boolean execute(String sql)  {
         try(Connection connection = ConnectionPool.getConnection();
             Statement statement = connection.createStatement()) {
-            statement.execute(sql);
+            return statement.execute(sql);
         } catch (SQLException e) {
             throw new RuntimeException("Error running sql :" + sql,  e);
+        }
+    }
+
+    /**
+     *
+     * @param sqls
+     * @return
+     */
+    public static int[] executeBatch(String[] sqls) {
+        try(Connection connection = ConnectionPool.getConnection();
+            Statement statement = connection.createStatement()) {
+            for(String sql : sqls) {
+                statement.addBatch(sql);
+            }
+            return statement.executeBatch();
+        } catch (SQLException e) {
+            throw new RuntimeException("Error running sqls :",  e);
+        }
+    }
+
+    public static int[] executeBatch(Connection connection, String[] sqls) {
+        try(Statement statement = connection.createStatement()) {
+            for(String sql : sqls) {
+                statement.addBatch(sql);
+            }
+            return statement.executeBatch();
+        } catch (SQLException e) {
+            throw new RuntimeException("Error running sqls :",  e);
         }
     }
 
@@ -184,7 +239,9 @@ public enum ConnectionPool {
      * @return
      */
     public static ArrowReader getReader(DuckDBConnection connection,
-                                        BufferAllocator allocator,  String sql, int batchSize)  {
+                                        BufferAllocator allocator,
+                                        String sql,
+                                        int batchSize)  {
         try {
             final Statement statement = connection.createStatement();
             statement.execute(sql);

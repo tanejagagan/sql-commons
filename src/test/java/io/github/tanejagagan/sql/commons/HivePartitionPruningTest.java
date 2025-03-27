@@ -90,7 +90,7 @@ public class HivePartitionPruningTest {
     }
 
     private static void assertSize(int expectedSize, String basePath, String filter, String[][] partition) throws SQLException, IOException {
-        List<FileNameAndSize> result = HivePartitionPruning.pruneFiles(basePath, filter, partition);
+        List<FileStatus> result = HivePartitionPruning.pruneFiles(basePath, filter, partition);
         assertEquals(expectedSize, result.size(), result.stream().map(Record::toString).collect(Collectors.joining(",")));
     }
 
@@ -109,6 +109,12 @@ public class HivePartitionPruningTest {
     public void testPruneFileS3NoPartition() throws SQLException, IOException {
         String path = "s3://" + MinioContainerTestUtil.TEST_BUCKET_NAME + "/hive_table/dt=2024-01-01/p=x";
         assertSize(1, path, "true", new String[0][0]);
+    }
+
+    @Test
+    public void testCast() throws SQLException, IOException {
+       String filter = "CAST(\"dt\" as DATE) IS NOT NULL AND CAST(\"dt\" as DATE) = '2025-01-01'";
+       assertSize(2, basePath, filter, partition);
     }
 
     @Test
