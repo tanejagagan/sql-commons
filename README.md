@@ -22,3 +22,7 @@ Read more about it at https://medium.com/@tanejagagan/ac5e00cb96b5
 `./mvnw exec:java -Dexec.mainClass="io.github.tanejagagan.sql.commons.HivePartitionPruning"`
 
 ## TODO Iceberg partition pruning
+
+## Publish the project
+- `export GPG_TTY=$(tty)`
+- `./mvnw clean -P release-sign-artifacts -DskipTests deploy`

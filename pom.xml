@@ -8,7 +8,7 @@
     <name>duckdb-sql-commons</name>
     <description>Common utilities from duckdb jdbc and sql transformation</description>
     <url>https://github.com/tanejagagan/sql-commons</url>
-    <version>0.0.2</version>
+    <version>0.0.3-SNAPSHOT</version>
     <licenses>
         <license>
             <name>The Apache License, Version 2.0</name>
@@ -180,8 +180,8 @@
                 <version>3.11.2</version>
                 <executions>
                     <execution>
-                        <id>bundle-sources</id>
-                        <phase>package</phase>
+                        <id>bundle-javadoc</id>
+                        <phase>verify</phase>
                         <goals>
                             <goal>jar</goal>
                         </goals>
@@ -195,7 +195,7 @@
                 <executions>
                     <execution>
                         <id>bundle-sources</id>
-                        <phase>package</phase>
+                        <phase>verify</phase>
                         <goals>
                             <goal>jar</goal>
                         </goals>
