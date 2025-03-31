@@ -106,11 +106,9 @@ public enum ConnectionPool {
     /**
      *
      * @param sql
-     * @throws SQLException
-     * @throws IOException
      * Used for debugging to print the output of the sql
      */
-    public static void printResult(String sql) throws SQLException, IOException {
+    public static void printResult(String sql) {
         try (Connection connection = getConnection();
              BufferAllocator rootAllocator = new RootAllocator();
              Statement statement = connection.createStatement()) {
@@ -121,6 +119,8 @@ public enum ConnectionPool {
                     System.out.println(reader.getVectorSchemaRoot().contentToTSVString());
                 }
             }
+        } catch (SQLException | IOException e) {
+            throw new RuntimeException(e);
         }
     }
 
@@ -129,11 +129,9 @@ public enum ConnectionPool {
      * @param connection
      * @param allocator
      * @param sql
-     * @throws SQLException
-     * @throws IOException
      * Used for debugging to print the output of the sql
      */
-    public static void printResult(Connection connection, BufferAllocator allocator, String sql) throws SQLException, IOException {
+    public static void printResult(Connection connection, BufferAllocator allocator, String sql) {
         try (Statement statement = connection.createStatement()) {
             statement.execute(sql);
             try (DuckDBResultSet resultSet = (DuckDBResultSet) statement.getResultSet();
@@ -142,6 +140,8 @@ public enum ConnectionPool {
                     System.out.println(reader.getVectorSchemaRoot().contentToTSVString());
                 }
             }
+        } catch (SQLException | IOException e) {
+            throw new RuntimeException(e);
         }
     }
 
