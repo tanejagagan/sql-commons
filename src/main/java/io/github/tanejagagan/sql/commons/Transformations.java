@@ -406,7 +406,7 @@ public class Transformations {
         }
     }
 
-    public static JsonNode parseToTree(Connection connection, String sql) throws SQLException, JsonProcessingException {
+    public static JsonNode parseToTree(Connection connection, String sql) throws JsonProcessingException {
         String escapeSql = escapeSpecialChar(sql);
         String jsonString = ConnectionPool.collectFirst(connection, String.format(JSON_SERIALIZE_SQL, escapeSql), String.class);
         return objectMapper.readTree(jsonString);

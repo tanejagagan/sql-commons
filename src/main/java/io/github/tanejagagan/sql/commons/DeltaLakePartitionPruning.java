@@ -250,6 +250,7 @@ public class DeltaLakePartitionPruning {
             // Collect partition column metadata
             List<String> partitionColumnNames = snapshot.getPartitionColumnNames(engine);
 
+
             // If no partition columns, return all files (no pruning possible)
             if (partitionColumnNames.isEmpty()) {
                 return getAllTableFiles(engine, snapshot);
