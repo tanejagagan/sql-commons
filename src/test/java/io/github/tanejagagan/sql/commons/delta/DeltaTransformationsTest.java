@@ -12,7 +12,7 @@ import java.sql.SQLException;
 public class DeltaTransformationsTest {
     @Test
     public void testTransformation() throws SQLException, JsonProcessingException {
-        String sql = "select a, b from t where x = 10 and y = cast('2025-01-01' as date)";
+        String sql = "select a, b from t where x = 10 or y = cast('2025-01-01' as date)";
         JsonNode tree = Transformations.parseToTree(sql);
         ArrayNode statements = (ArrayNode)tree.get("statements");
         JsonNode firstStatement =  statements.get(0);
