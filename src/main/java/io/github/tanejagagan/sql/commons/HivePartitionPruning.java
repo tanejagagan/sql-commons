@@ -132,7 +132,7 @@ public class HivePartitionPruning extends PartitionPruning {
             try (DuckDBConnection writeConnection = ConnectionPool.getConnection();
                  BufferAllocator allocator = new RootAllocator();
                  ArrowReader reader1 = ConnectionPool.getReader(readConnection, allocator, firstSql, 1000);
-                 Closeable ignored = ConnectionPool.createTempTable(writeConnection, allocator, reader1,
+                 Closeable ignored = ConnectionPool.createTempTableWithMap(writeConnection, allocator, reader1,
                          UNESCAPE_FN, List.of("partitions"), UNSCAPE_PARTITION_FIELD, tempTableName);
                  ArrowReader reader2 = ConnectionPool.getReader(writeConnection, allocator, transformed, 100)) {
                 while (reader2.loadNextBatch()) {

@@ -2,6 +2,7 @@ package io.github.tanejagagan.sql.commons;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import io.github.tanejagagan.sql.commons.types.DataType;
+import io.github.tanejagagan.sql.commons.util.SchemaUtils;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
@@ -10,7 +11,7 @@ import java.sql.SQLException;
 public class SchemaUtilTest {
     @Test
     public void testSchema() throws SQLException, JsonProcessingException {
-        DataType.Struct schema = SchemaUtil.buildSchema(
+        DataType.Struct schema = SchemaUtils.buildSchema(
                 "select cast(a as int), cast( b as bigint[]), cast(c as struct(a int)), cast(d as decimal) from t " +
                         "where cast(\"x\".\"y\" as varchar) = 'abc' " +
                         "group by cast( g as int)");
@@ -27,7 +28,7 @@ public class SchemaUtilTest {
 
     @Test
     public void testWithNoCast() throws SQLException, JsonProcessingException {
-        DataType.Struct schema = SchemaUtil.buildSchema( "select a, b ,c from t");
+        DataType.Struct schema = SchemaUtils.buildSchema( "select a, b ,c from t");
         DataType.Struct expected = new DataType.Struct()
                 .add("a", DataType.NULL)
                 .add("b", DataType.NULL)
@@ -37,7 +38,7 @@ public class SchemaUtilTest {
 
     @Test
     public void test() throws SQLException, JsonProcessingException {
-        DataType.Struct schema = SchemaUtil.buildSchema( "select count(s.i2), s.i1 from t group by s.i1");
+        DataType.Struct schema = SchemaUtils.buildSchema( "select count(s.i2), s.i1 from t group by s.i1");
         Assertions.assertEquals(2, ((DataType.Struct)schema.getOrAdd("s", DataType.NULL)).fields.size());
     }
 }

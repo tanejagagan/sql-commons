@@ -8,7 +8,7 @@
     <name>duckdb-sql-commons</name>
     <description>Common utilities from duckdb jdbc and sql transformation</description>
     <url>https://github.com/tanejagagan/sql-commons</url>
-    <version>0.0.3-SNAPSHOT</version>
+    <version>0.0.3</version>
     <licenses>
         <license>
             <name>The Apache License, Version 2.0</name>
@@ -31,13 +31,13 @@
         <maven.compiler.source>17</maven.compiler.source>
         <maven.compiler.target>17</maven.compiler.target>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <duckdb.version>1.2.1</duckdb.version>
+        <duckdb.version>1.2.2.0</duckdb.version>
         <jackson.version>2.17.2</jackson.version>
-        <arrow.version>18.0.0</arrow.version>
+        <arrow.version>18.2.0</arrow.version>
         <junit.version>5.8.1</junit.version>
         <slf4j.version>2.0.16</slf4j.version>
         <testcontainer.version>1.20.4</testcontainer.version>
-        <hadoop.version>3.3.1</hadoop.version>
+        <hadoop.version>3.3.4</hadoop.version>
         <delta-kernel.version>3.3.0</delta-kernel.version>
     </properties>
     <dependencies>

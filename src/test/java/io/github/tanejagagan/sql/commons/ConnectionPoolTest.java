@@ -1,5 +1,10 @@
 package io.github.tanejagagan.sql.commons;
 
+import io.github.tanejagagan.sql.commons.util.TestUtils;
+import org.apache.arrow.memory.BufferAllocator;
+import org.apache.arrow.memory.RootAllocator;
+import org.apache.arrow.vector.ipc.ArrowReader;
+import org.duckdb.DuckDBConnection;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
@@ -42,7 +47,7 @@ public class ConnectionPoolTest {
 
     private void test() {
         try {
-            DuckDBTestUtil.isEqual("select 't' as name", "select * from (show tables)");
+            TestUtils.isEqual("select 't' as name", "select * from (show tables)");
         } catch (SQLException | IOException | AssertionError e) {
             throw new RuntimeException(e);
         }
@@ -51,5 +56,16 @@ public class ConnectionPoolTest {
     private static String newTempDir() throws IOException {
         Path tempDir = Files.createTempDirectory("duckdb-sql-commons-");
         return tempDir.toString();
+    }
+
+    @Test
+    public void testArrowReader() throws SQLException, IOException {
+        try(DuckDBConnection connection = ConnectionPool.getConnection();
+            BufferAllocator allocator = new RootAllocator();
+        ArrowReader reader = ConnectionPool.getReader(connection, allocator, "select * from generate_series(10)", 100)) {
+            while (reader.loadNextBatch()){
+                System.out.println(reader.getVectorSchemaRoot().contentToTSVString());
+            }
+        }
     }
 }

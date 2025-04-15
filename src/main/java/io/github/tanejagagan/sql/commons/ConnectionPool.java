@@ -15,6 +15,7 @@ import org.duckdb.DuckDBResultSet;
 
 import java.io.Closeable;
 import java.io.IOException;
+import java.io.InputStream;
 import java.sql.*;
 import java.util.ArrayList;
 import java.util.List;
@@ -23,6 +24,7 @@ import java.util.Properties;
 public enum ConnectionPool {
     INSTANCE;
 
+    private static final String DUCKDB_PROPERTY_FILENAME = "duckdb.properties";
     private final DuckDBConnection connection;
 
     private final ArrayList<String> preGetConnectionStatements = new ArrayList<>();
@@ -37,9 +39,11 @@ public enum ConnectionPool {
 
     ConnectionPool() {
         try {
-            Properties props = new Properties();
-            props.setProperty(DuckDBDriver.JDBC_STREAM_RESULTS, String.valueOf(true));
-            this.connection = (DuckDBConnection) DriverManager.getConnection("jdbc:duckdb:", props);
+            final Properties properties = loadProperties();
+            if (!properties.contains(DuckDBDriver.JDBC_STREAM_RESULTS)) {
+                properties.setProperty(DuckDBDriver.JDBC_STREAM_RESULTS, String.valueOf(true));
+            }
+            this.connection = (DuckDBConnection) DriverManager.getConnection("jdbc:duckdb:", properties);
         } catch (SQLException e) {
             throw new RuntimeException(e);
         }
@@ -158,13 +162,13 @@ public enum ConnectionPool {
      * @throws IOException
      *
      */
-    public static Closeable createTempTable(DuckDBConnection connection,
-                                            BufferAllocator allocator,
-                                            ArrowReader reader,
-                                            MappedReader.Function function,
-                                            List<String> sourceColumns,
-                                            Field targetField,
-                                            String tableName) throws IOException {
+    public static Closeable createTempTableWithMap(DuckDBConnection connection,
+                                                   BufferAllocator allocator,
+                                                   ArrowReader reader,
+                                                   MappedReader.Function function,
+                                                   List<String> sourceColumns,
+                                                   Field targetField,
+                                                   String tableName) throws IOException {
         ArrowReader mappedReader = new MappedReader(allocator.newChildAllocator("mmmm", 0, Long.MAX_VALUE), reader, function, sourceColumns,
                 targetField);
         final ArrowArrayStream arrow_array_stream = ArrowArrayStream.allocateNew(allocator);
@@ -267,7 +271,13 @@ public enum ConnectionPool {
 
                 @Override
                 protected void closeReadSource() throws IOException {
-                    internal.close();
+                    try {
+                        internal.close();
+                    } catch (NullPointerException e) {
+                        // There are some scenarios where Duckdb itself closes the reader
+                        // try to close it with closeReadSources
+                        internal.close(false);
+                    }
                     try {
                         resultSet.close();
                         _statement.close();
@@ -293,6 +303,20 @@ public enum ConnectionPool {
 
     public static DuckDBConnection getConnection()  {
         return INSTANCE.getConnectionInternal();
+    }
+
+    /**
+     *
+     * @param sqls Sql which will be executed on connection before connection is returned.
+     *            This is generally used to set parameters as well as database and schema
+     * @return
+     */
+    public static DuckDBConnection getConnection(String[] sqls) {
+        DuckDBConnection connection = getConnection();
+        for(String sql : sqls) {
+            executeBatch(connection, sqls);
+        }
+        return connection;
     }
 
     private DuckDBConnection getConnectionInternal() {
@@ -324,5 +348,23 @@ public enum ConnectionPool {
      */
     public static void removePreGetConnectionStatement(String sql) {
         INSTANCE.preGetConnectionStatements.remove(sql);
+    }
+
+    public ArrayList<String> getPreGetConnectionStatements() {
+        return preGetConnectionStatements;
+    }
+
+    private static Properties loadProperties() {
+        Properties properties = new Properties();
+
+        // Try-with-resources to ensure InputStream is closed
+        try (InputStream input = ConnectionPool.class.getClassLoader().getResourceAsStream(DUCKDB_PROPERTY_FILENAME)) {
+            if (input != null) {
+                properties.load(input);
+            }
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+        return properties;
     }
 }

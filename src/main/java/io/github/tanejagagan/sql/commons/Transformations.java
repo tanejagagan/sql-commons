@@ -434,6 +434,19 @@ public class Transformations {
         return result;
     }
 
+    public static List<JsonNode> splitStatements(JsonNode tree) {
+        ArrayNode statements = (ArrayNode) tree.get("statements");
+        List<JsonNode> results = new ArrayList<>();
+        for (JsonNode s : statements) {
+            ObjectNode res = tree.deepCopy();
+            ArrayNode newStatements = new ArrayNode(JsonNodeFactory.instance, 1);
+            newStatements.add(s);
+            res.set("statements", newStatements);
+            results.add(res);
+        }
+        return results;
+    }
+
     private static String escapeSpecialChar(String sql) {
         return sql.replaceAll("'", "''");
     }
