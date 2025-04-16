@@ -31,6 +31,9 @@ public class Transformations {
     public static final Function<JsonNode, Boolean> IS_CONJUNCTION_AND = isClassAndType(CONJUNCTION_CLASS,
             CONJUNCTION_TYPE_AND);
 
+    public static final Function<JsonNode, Boolean> IS_CONJUNCTION_OR = isClassAndType(CONJUNCTION_CLASS,
+            CONJUNCTION_TYPE_OR);
+
     public static final Function<JsonNode, Boolean> IS_CAST = isClassAndType(CAST_CLASS, CAST_TYPE_OPERATOR);
 
     public static final Function<JsonNode, Boolean> IS_EMPTY_CONJUNCTION_AND = n -> {
