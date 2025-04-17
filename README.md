@@ -1,5 +1,10 @@
 <img src="doc/image/query-fingerprinting.jpg">
-
+## Sql-Commons
+It's a collection of functions for interacting with DuckDB 
+- Connection Pooling 
+- Query Parsing/Transformation
+- Delta Lake/ Hive Partition pruning based on the query predicate
+- Detecting similar queries (https://medium.com/@tanejagagan/ac5e00cb96b5)
 
 ## Requirement 
 - java 17
