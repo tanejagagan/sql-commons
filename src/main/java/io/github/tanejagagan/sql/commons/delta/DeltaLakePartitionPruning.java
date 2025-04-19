@@ -68,7 +68,6 @@ public class DeltaLakePartitionPruning {
 
         // Convert the where clause to a Delta predicate
         Predicate deltaLakePredicate = (Predicate) DeltaTransformations.toDeltaPredicate(whereClause);
-        System.out.println(deltaLakePredicate);        // Create a new Scan instance with the Delta predicate as a filter
         Scan scanWithPartitionPredicate = snapshot.getScanBuilder(engine)
                 .withFilter(engine, deltaLakePredicate)
                 .build();
