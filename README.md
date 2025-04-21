@@ -16,7 +16,7 @@ Read more about it at https://medium.com/@tanejagagan/ac5e00cb96b5
 <img src="doc/image/tree-transformation.png">
 
 ## Delta Lake partition pruning
-- `./mvnw exec:java -Dexec.mainClass="io.github.tanejagagan.sql.commons.delta.DeltaLakePartitionPruning"`
+- `./mvnw exec:java -Dexec.mainClass="io.github.tanejagagan.sql.commons.delta.PartitionPruning"`
 
 ## Hive partition pruning
 `./mvnw exec:java -Dexec.mainClass="io.github.tanejagagan.sql.commons.HivePartitionPruning"`

@@ -5,7 +5,6 @@ import io.delta.kernel.annotation.Evolving;
 import io.delta.kernel.expressions.*;
 import io.delta.kernel.expressions.Column;
 import io.delta.kernel.expressions.Literal;
-import io.github.tanejagagan.sql.commons.Transformations;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -16,89 +15,14 @@ import java.time.temporal.ChronoField;
 import java.util.Arrays;
 
 import java.time.format.DateTimeFormatter;
-import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
-public class DeltaTransformations {
-    // Define data type categories
-    // https://docs.databricks.com/aws/en/sql/language-manual/sql-ref-datatypes#data-type-classification
-    // NOTE intType -> INTEGER (NOT INT), binaryType -> BLOB (NOT BINARY)
-    private static final String tinyIntType = "TINYINT";
-    private static final String smallIntType = "SMALLINT";
-    private static final String intType = "INTEGER";
-    private static final String bigIntType = "BIGINT";
-    private static final String decimalType = "DECIMAL";
-    private static final String floatType = "FLOAT";
-    private static final String doubleType = "DOUBLE";
-    private static final String dateType = "DATE";
-    private static final String timestampType = "TIMESTAMP";
-    private static final String timestampNtzType = "TIMESTAMP_NTZ";
-    private static final String arrayType = "ARRAY";
-    private static final String mapType = "MAP";
-    private static final String structType = "STRUCT";
-    private static final String variantType = "VARIANT";
-    private static final String objectType = "OBJECT";
-    private static final String booleanType =  "BOOLEAN";
-    private static final String binaryType = "BLOB";
-    private static final String intervalType = "INTERVAL";
-    private static final String stringType = "STRING";
-    private static final List<String> integralNumericTypes = List.of(tinyIntType, smallIntType, intType, bigIntType);
-    private static final List<String> exactNumericTypes = List.of(decimalType);
-    private static final List<String> binaryFloatingPointTypes = List.of(floatType, doubleType);
-    private static final List<String> numericTypes = Stream.of(integralNumericTypes, exactNumericTypes, binaryFloatingPointTypes).flatMap(List::stream).toList();
-    private static final List<String> datetimeTypes = List.of(dateType, timestampType, timestampNtzType);
-    private static final List<String> complexTypes =  List.of(arrayType, mapType, structType, variantType, objectType);
 
-    private static final List<String> allTypes = Stream.of(
-                    numericTypes.stream(),
-                    datetimeTypes.stream(),
-                    complexTypes.stream(),
-                    Stream.of(booleanType),
-                    Stream.of(binaryType),
-                    Stream.of(intervalType),
-                    Stream.of(stringType)
-            )
-            .flatMap(stream -> stream)
-            .toList();
+import static io.github.tanejagagan.sql.commons.delta.DataType.getCastRules;
 
-    // Define casting rules
-    // https://docs.databricks.com/aws/en/sql/language-manual/functions/cast
-    // TODO year-month interval, day-time interval
-    private static final Map<String, List<String>> castRules = Map.ofEntries(
-            // Numeric
-            Map.entry(tinyIntType, Stream.of(numericTypes.stream(), Stream.of(stringType), Stream.of(timestampType), Stream.of(booleanType), Stream.of(variantType)).flatMap(stream -> stream).collect(Collectors.toList())),
-            Map.entry(smallIntType, Stream.of(numericTypes.stream(), Stream.of(stringType), Stream.of(timestampType), Stream.of(booleanType), Stream.of(variantType)).flatMap(stream -> stream).collect(Collectors.toList())),
-            Map.entry(intType, Stream.of(numericTypes.stream(), Stream.of(stringType), Stream.of(timestampType), Stream.of(booleanType), Stream.of(variantType)).flatMap(stream -> stream).collect(Collectors.toList())),
-            Map.entry(bigIntType, Stream.of(numericTypes.stream(), Stream.of(stringType), Stream.of(timestampType), Stream.of(booleanType), Stream.of(variantType)).flatMap(stream -> stream).collect(Collectors.toList())),
-            Map.entry(decimalType, Stream.of(numericTypes.stream(), Stream.of(stringType), Stream.of(timestampType), Stream.of(booleanType), Stream.of(variantType)).flatMap(stream -> stream).collect(Collectors.toList())),
-            Map.entry(floatType, Stream.of(numericTypes.stream(), Stream.of(stringType), Stream.of(timestampType), Stream.of(booleanType), Stream.of(variantType)).flatMap(stream -> stream).collect(Collectors.toList())),
-            Map.entry(doubleType, Stream.of(numericTypes.stream(), Stream.of(stringType), Stream.of(timestampType), Stream.of(booleanType), Stream.of(variantType)).flatMap(stream -> stream).collect(Collectors.toList())),
-            // String
-            Map.entry(stringType, allTypes),
-            // DATE
-            Map.entry(dateType, Stream.of(Stream.of(stringType), datetimeTypes.stream(), Stream.of(variantType)).flatMap(stream -> stream).collect(Collectors.toList())),
-            // TIMESTAMP
-            Map.entry(timestampType, Stream.of(Stream.of(stringType), datetimeTypes.stream(), Stream.of(variantType)).flatMap(stream -> stream).collect(Collectors.toList())),
-            // TIMESTAMP_NTZ
-            Map.entry(timestampNtzType, Stream.of(Stream.of(stringType), datetimeTypes.stream(), Stream.of(variantType)).flatMap(stream -> stream).collect(Collectors.toList())),
-            // BOOLEAN
-            Map.entry(booleanType, Stream.of(Stream.of(stringType), Stream.of(timestampType), Stream.of(booleanType), numericTypes.stream(), Stream.of(variantType)).flatMap(stream -> stream).collect(Collectors.toList())),
-            // BINARY
-            Map.entry(binaryType, Stream.of(Stream.of(stringType), numericTypes.stream(), Stream.of(variantType), Stream.of(binaryType)).flatMap(stream -> stream).collect(Collectors.toList())),
-            // ARRAY
-            Map.entry(arrayType, List.of(stringType, arrayType, arrayType, variantType)),
-            // MAP
-            Map.entry(mapType, List.of(stringType, mapType)),
-            // STRUCT
-            Map.entry(structType, List.of(stringType, structType)),
-            // VARIANT
-            Map.entry(variantType, List.of(stringType, variantType)),
-            // OBJECT
-            Map.entry(objectType, List.of(mapType, structType))
-    );
+
+public class Transformations {
 
     // TODO
     // 1. Binary Type
@@ -107,44 +31,44 @@ public class DeltaTransformations {
     // 4. ArrayType, MapType, StructType, StructField
     // https://github.com/apache/spark/blob/87b9866903baa3b291058b3613f9954ec62c178c/sql/catalyst/src/main/scala/org/apache/spark/sql/catalyst/expressions/Cast.scala#L4
     private static final Map<String, Function<Expression, Object>> parsingFunctions = Map.ofEntries(
-            Map.entry(tinyIntType, expr -> Byte.parseByte(expr.toString())),
-            Map.entry(smallIntType, expr -> Short.parseShort(expr.toString())),
-            Map.entry(intType, expr -> Integer.parseInt(expr.toString())),
-            Map.entry(bigIntType, expr -> Long.parseLong(expr.toString())),
-            Map.entry(floatType, expr -> Float.parseFloat(expr.toString())),
-            Map.entry(doubleType, expr -> Double.parseDouble(expr.toString())),
-//          Map.entry(decimalType),
-            Map.entry(stringType, expr -> (expr.toString())),
-            Map.entry(binaryType, expr -> {
+            Map.entry(DataType.TINY_INT, expr -> Byte.parseByte(expr.toString())),
+            Map.entry(DataType.SMALL_INT, expr -> Short.parseShort(expr.toString())),
+            Map.entry(DataType.INT, expr -> Integer.parseInt(expr.toString())),
+            Map.entry(DataType.BIG_INT, expr -> Long.parseLong(expr.toString())),
+            Map.entry(DataType.FLOAT, expr -> Float.parseFloat(expr.toString())),
+            Map.entry(DataType.DOUBLE, expr -> Double.parseDouble(expr.toString())),
+            Map.entry(DataType.DECIMAL, expr -> new java.math.BigDecimal(expr.toString())),
+            Map.entry(DataType.STRING, expr -> expr.toString()),
+            Map.entry(DataType.BINARY, expr -> {
                 // Assuming Expression stores a byte[] as its value
                 if (expr instanceof Literal) {
                     return ((Literal) expr).getDataType(); // Replace this with the actual method
                 }
                 throw new IllegalArgumentException("Invalid expression type for BINARY: " + expr);
             }),
-            Map.entry(booleanType, expr -> Boolean.parseBoolean(expr.toString())),
-            Map.entry(timestampType, expr -> {
+            Map.entry(DataType.BOOLEAN, expr -> Boolean.parseBoolean(expr.toString())),
+            Map.entry(DataType.TIMESTAMP, expr -> {
                 return java.sql.Timestamp.valueOf(expr.toString()).getTime() * 1000; // Convert to microseconds
             }),
-            Map.entry(timestampNtzType, expr -> java.time.LocalDateTime.parse(expr.toString())),
-            Map.entry(dateType, expr -> Date.parse(expr.toString()))
+            Map.entry(DataType.TIMESTAMP_NTZ, expr -> java.time.LocalDateTime.parse(expr.toString())),
+            Map.entry(DataType.DATE, expr -> Date.parse(expr.toString()))
 
     );
 
     private static final Map<String, Function<Object, Expression>> castingFunctions = Map.ofEntries(
-            Map.entry(tinyIntType, value -> Literal.ofByte(((Number) value).byteValue())),
-            Map.entry(smallIntType, value -> Literal.ofShort(((Number) value).shortValue())),
-            Map.entry(intType, value -> Literal.ofInt(((Number) value).intValue())),
-            Map.entry(bigIntType, value -> Literal.ofLong(((Number) value).longValue())),
-            Map.entry(floatType, value -> Literal.ofFloat(((Number) value).floatValue())),
-            Map.entry(doubleType, value -> Literal.ofDouble(((Number) value).doubleValue())),
-//          Map.entry(decimalType),
-            Map.entry(stringType, value -> Literal.ofString(value.toString())),
-            Map.entry(binaryType, value -> Literal.ofBinary((byte[]) value)),
-            Map.entry(booleanType, value -> Literal.ofBoolean((Boolean) value)),
+            Map.entry(DataType.TINY_INT, value -> Literal.ofByte(((Number) value).byteValue())),
+            Map.entry(DataType.SMALL_INT, value -> Literal.ofShort(((Number) value).shortValue())),
+            Map.entry(DataType.INT, value -> Literal.ofInt(((Number) value).intValue())),
+            Map.entry(DataType.BIG_INT, value -> Literal.ofLong(((Number) value).longValue())),
+            Map.entry(DataType.FLOAT, value -> Literal.ofFloat(((Number) value).floatValue())),
+            Map.entry(DataType.DOUBLE, value -> Literal.ofDouble(((Number) value).doubleValue())),
+//          Map.entry(DataType.DECIMAL),
+            Map.entry(DataType.STRING, value -> Literal.ofString(value.toString())),
+            Map.entry(DataType.BINARY, value -> Literal.ofBinary((byte[]) value)),
+            Map.entry(DataType.BOOLEAN, value -> Literal.ofBoolean((Boolean) value)),
 //            Map.entry(timestampType, value -> {
 //            })
-            Map.entry(dateType, value -> Literal.ofDate(Integer.parseInt(value.toString())))
+            Map.entry(DataType.TIMESTAMP, value -> Literal.ofDate(Integer.parseInt(value.toString())))
     );
 
     /**
@@ -196,7 +120,7 @@ public class DeltaTransformations {
 
     // Function to check if a type can be cast to another type
     private static boolean canCast(String fromType, String toType) {
-        return castRules.get(fromType).contains(toType);
+        return getCastRules().get(fromType).contains(toType);
     }
 
     /**
@@ -335,15 +259,15 @@ public class DeltaTransformations {
     }
 
     public static Expression toDeltaPredicate(JsonNode jsonPredicate) throws IOException {
-        if(Transformations.IS_CONSTANT.apply(jsonPredicate)) {
+        if(io.github.tanejagagan.sql.commons.Transformations.IS_CONSTANT.apply(jsonPredicate)) {
             return toLiteral(jsonPredicate);
-        } else if (Transformations.IS_REFERENCE.apply(jsonPredicate)) {
+        } else if (io.github.tanejagagan.sql.commons.Transformations.IS_REFERENCE.apply(jsonPredicate)) {
             return toReference(jsonPredicate);
-        } else if(Transformations.IS_COMPARISON.apply(jsonPredicate)){
+        } else if(io.github.tanejagagan.sql.commons.Transformations.IS_COMPARISON.apply(jsonPredicate)){
             return toComparison(jsonPredicate);
-        } else if(Transformations.IS_CONJUNCTION_AND.apply(jsonPredicate) || Transformations.IS_CONJUNCTION_OR.apply(jsonPredicate)  ) {
+        } else if(io.github.tanejagagan.sql.commons.Transformations.IS_CONJUNCTION_AND.apply(jsonPredicate) || io.github.tanejagagan.sql.commons.Transformations.IS_CONJUNCTION_OR.apply(jsonPredicate)  ) {
             return toConjunction(jsonPredicate);
-        } else if(Transformations.IS_CAST.apply(jsonPredicate)) {
+        } else if(io.github.tanejagagan.sql.commons.Transformations.IS_CAST.apply(jsonPredicate)) {
             return toCast(jsonPredicate);
         }
         throw new UnsupportedOperationException("No transformation supported" + jsonPredicate);
