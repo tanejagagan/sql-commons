@@ -29,9 +29,9 @@ public class PartitionPruningTest {
 
     @Test
     public void pruneFilesPartitionTest() throws SQLException, IOException {
-//        assertSize(3, basePath, "dt=cast('2024-01-01' as date)");
+        assertSize(3, basePath, "dt=cast('2024-01-01' as date)");
         assertSize(1, basePath, "p='x'");
-//        assertSize(1, basePath, "dt=cast('2024-01-01' as date) and p = 'x'");
+        assertSize(1, basePath, "dt=cast('2024-01-01' as date) and p = 'x'");
         assertSize(2, basePath,"p='a b' or p ='x'");
     }
 }

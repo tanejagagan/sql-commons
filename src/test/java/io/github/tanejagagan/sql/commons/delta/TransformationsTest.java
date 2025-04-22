@@ -11,8 +11,8 @@ import java.sql.SQLException;
 public class TransformationsTest {
     @Test
     public void testTransformation() throws SQLException, IOException {
-//        String sql = "select a, b from t where x = 10 or y = cast('2025-01-01' as date)";
-        String sql = "select a, b from t where CAST('Spark' AS BINARY)";
+//        String sql = "select a, b from t where x = 10 or y = 15";
+        String sql = "select a, b from t where y = cast('2024-01-01' as DATE)";
         JsonNode tree = io.github.tanejagagan.sql.commons.Transformations.parseToTree(sql);
         ArrayNode statements = (ArrayNode)tree.get("statements");
         JsonNode firstStatement =  statements.get(0);

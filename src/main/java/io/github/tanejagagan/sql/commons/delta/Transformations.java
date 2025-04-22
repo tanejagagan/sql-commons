@@ -27,8 +27,7 @@ public class Transformations {
     // TODO
     // 1. Binary Type
     // 2. Decimal Type
-    // 3. dateType, timestampType and timestampNtzType
-    // 4. ArrayType, MapType, StructType, StructField
+    // 3. ArrayType, MapType, StructType, StructField
     // https://github.com/apache/spark/blob/87b9866903baa3b291058b3613f9954ec62c178c/sql/catalyst/src/main/scala/org/apache/spark/sql/catalyst/expressions/Cast.scala#L4
     private static final Map<String, Function<Expression, Object>> parsingFunctions = Map.ofEntries(
             Map.entry(DataType.TINY_INT, expr -> Byte.parseByte(expr.toString())),
@@ -56,19 +55,28 @@ public class Transformations {
     );
 
     private static final Map<String, Function<Object, Expression>> castingFunctions = Map.ofEntries(
-            Map.entry(DataType.TINY_INT, value -> Literal.ofByte(((Number) value).byteValue())),
-            Map.entry(DataType.SMALL_INT, value -> Literal.ofShort(((Number) value).shortValue())),
-            Map.entry(DataType.INT, value -> Literal.ofInt(((Number) value).intValue())),
-            Map.entry(DataType.BIG_INT, value -> Literal.ofLong(((Number) value).longValue())),
-            Map.entry(DataType.FLOAT, value -> Literal.ofFloat(((Number) value).floatValue())),
-            Map.entry(DataType.DOUBLE, value -> Literal.ofDouble(((Number) value).doubleValue())),
-//          Map.entry(DataType.DECIMAL),
-            Map.entry(DataType.STRING, value -> Literal.ofString(value.toString())),
-            Map.entry(DataType.BINARY, value -> Literal.ofBinary((byte[]) value)),
-            Map.entry(DataType.BOOLEAN, value -> Literal.ofBoolean((Boolean) value)),
-//            Map.entry(timestampType, value -> {
-//            })
-            Map.entry(DataType.TIMESTAMP, value -> Literal.ofDate(Integer.parseInt(value.toString())))
+            Map.entry(DataType.TINY_INT, DataTypeConverter::toTinyInt),
+            Map.entry(DataType.SMALL_INT, DataTypeConverter::toSmallInt),
+            Map.entry(DataType.INT, DataTypeConverter::toInt),
+            Map.entry(DataType.BIG_INT, DataTypeConverter::toBigInt),
+            Map.entry(DataType.FLOAT, DataTypeConverter::toFloat),
+            Map.entry(DataType.DOUBLE, DataTypeConverter::toDouble),
+            Map.entry(DataType.STRING, DataTypeConverter::toString),
+            Map.entry(DataType.BINARY, DataTypeConverter::toBinary),
+            Map.entry(DataType.BOOLEAN, DataTypeConverter::toBoolean),
+            Map.entry(DataType.TIMESTAMP, DataTypeConverter::toTimestamp),
+            Map.entry(DataType.TIMESTAMP_NTZ, DataTypeConverter::toTimestamp),
+            Map.entry(DataType.DATE, DataTypeConverter::toDate),
+
+            // TODO Add Decimal support
+            Map.entry(DataType.DECIMAL, value -> {
+                // Default precision and scale
+                int defaultPrecision = 10;
+                int defaultScale = 0;
+                // Call the toDecimal method with default precision and scale
+                return DataTypeConverter.toDecimal(value, defaultPrecision, defaultScale);
+            })
+
     );
 
     /**
@@ -95,28 +103,6 @@ public class Transformations {
         return castFunction.apply(intermediateValue);
     }
 
-
-
-
-
-//    // Define casting functions
-//    private static final Map<String, Function<Expression, Expression>> castingFunctions = Map.ofEntries(
-//            Map.entry("BOOLEAN", expr -> Literal.ofBoolean(Boolean.parseBoolean(expr.toString()))),
-//            Map.entry("BYTE", expr -> Literal.ofByte(Byte.parseByte(expr.toString()))),
-//            Map.entry("SHORT", expr -> Literal.ofShort(Short.parseShort(expr.toString()))),
-//            Map.entry("INTEGER", expr -> Literal.ofInt(Integer.parseInt(expr.toString()))),
-//            Map.entry("VARCHAR", expr -> Literal.ofString(expr.toString())),
-//            Map.entry("LONG", expr -> Literal.ofLong(Long.parseLong(expr.toString()))),
-//            Map.entry("FLOAT", expr -> Literal.ofFloat(Float.parseFloat(expr.toString()))),
-//            Map.entry("DOUBLE", expr -> Literal.ofDouble(Double.parseDouble(expr.toString()))),
-//            // TODO
-////            Map.entry("DECIMAL", expr -> {
-////
-////            }),
-//            Map.entry("STRING", expr -> Literal.ofString(expr.toString())),
-//            Map.entry("TIMESTAMP", expr -> Literal.ofTimestamp(timestampToMicrosSinceEpochUTC(expr.toString()))),
-//            Map.entry("TIMESTAMP_NTZ", expr -> Literal.ofTimestamp(timestampToMicrosSinceEpochUTC(expr.toString())))
-//    );
 
     // Function to check if a type can be cast to another type
     private static boolean canCast(String fromType, String toType) {
