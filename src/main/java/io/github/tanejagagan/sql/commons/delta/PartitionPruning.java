@@ -13,7 +13,6 @@ import io.delta.kernel.expressions.*;
 import io.delta.kernel.internal.InternalScanFileUtils;
 import io.delta.kernel.utils.CloseableIterator;
 import io.delta.kernel.utils.FileStatus;
-import io.github.tanejagagan.sql.commons.Transformations;
 import org.apache.hadoop.conf.Configuration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -27,8 +26,8 @@ import java.util.*;
  * Utility class for efficient file pruning in Delta tables using partition filters.
  * Provides mechanisms to filter Delta table files based on their partition values.
  */
-public class DeltaLakePartitionPruning {
-    private static final Logger logger = LoggerFactory.getLogger(DeltaLakePartitionPruning.class);
+public class PartitionPruning {
+    private static final Logger logger = LoggerFactory.getLogger(PartitionPruning.class);
 
     /**
      * Prunes files in a Delta table based on the provided filter and partition data types.
@@ -56,7 +55,7 @@ public class DeltaLakePartitionPruning {
         Snapshot snapshot = deltaTable.getLatestSnapshot(engine);
 
         // Parse the filter into a Delta predicate
-        JsonNode tree = Transformations.parseToTree(String.format("SELECT * FROM T WHERE %s", filter));
+        JsonNode tree = io.github.tanejagagan.sql.commons.Transformations.parseToTree(String.format("SELECT * FROM T WHERE %s", filter));
         ArrayNode statements = (ArrayNode) tree.get("statements");
         JsonNode firstStatement = statements.get(0);
         JsonNode whereClause = firstStatement.get("node").get("where_clause");
@@ -67,8 +66,7 @@ public class DeltaLakePartitionPruning {
         }
 
         // Convert the where clause to a Delta predicate
-        Predicate deltaLakePredicate = (Predicate) DeltaTransformations.toDeltaPredicate(whereClause);
-        System.out.println(deltaLakePredicate);        // Create a new Scan instance with the Delta predicate as a filter
+        Predicate deltaLakePredicate = (Predicate) Transformations.toDeltaPredicate(whereClause);
         Scan scanWithPartitionPredicate = snapshot.getScanBuilder(engine)
                 .withFilter(engine, deltaLakePredicate)
                 .build();

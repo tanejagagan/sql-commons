@@ -7,11 +7,11 @@ import java.sql.SQLException;
 import java.util.List;
 import java.util.stream.Collectors;
 
-import static io.github.tanejagagan.sql.commons.delta.DeltaLakePartitionPruning.*;
+import static io.github.tanejagagan.sql.commons.delta.PartitionPruning.*;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 
-public class DeltaLakePartitionPruningTest {
+public class PartitionPruningTest {
     static final String basePath = "example/delta_table";
     static final String[][] partition = {{"dt", "date"}, {"p", "string"}};
 
