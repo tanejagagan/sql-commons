@@ -1,10 +1,13 @@
 package io.github.tanejagagan.sql.commons;
 
 import io.github.tanejagagan.sql.commons.util.TestUtils;
+import org.apache.arrow.c.ArrowArrayStream;
+import org.apache.arrow.c.Data;
 import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.memory.RootAllocator;
 import org.apache.arrow.vector.ipc.ArrowReader;
 import org.duckdb.DuckDBConnection;
+import org.duckdb.DuckDBResultSet;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
@@ -12,6 +15,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.SQLException;
+import java.sql.Statement;
+import java.util.List;
 
 public class ConnectionPoolTest {
 
@@ -66,6 +71,17 @@ public class ConnectionPoolTest {
             while (reader.loadNextBatch()){
                 System.out.println(reader.getVectorSchemaRoot().contentToTSVString());
             }
+        }
+    }
+
+    @Test
+    public void testBulkIngestion() throws IOException, SQLException {
+        String tempDir = newTempDir();
+        String sql = "select generate_series, generate_series a from generate_series(10)";
+        try(DuckDBConnection connection = ConnectionPool.getConnection();
+            BufferAllocator allocator = new RootAllocator();
+            ArrowReader reader = ConnectionPool.getReader(connection, allocator, sql, 1000)){
+            ConnectionPool.bulkIngestToFile(reader, allocator, tempDir + "/bulk", List.of("a"), "parquet");
         }
     }
 }

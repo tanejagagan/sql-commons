@@ -8,7 +8,7 @@
     <name>duckdb-sql-commons</name>
     <description>Common utilities from duckdb jdbc and sql transformation</description>
     <url>https://github.com/tanejagagan/sql-commons</url>
-    <version>0.0.3</version>
+    <version>0.0.4</version>
     <licenses>
         <license>
             <name>The Apache License, Version 2.0</name>
