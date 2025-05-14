@@ -43,8 +43,8 @@ public class PartitionPruning {
                                                                                 String filter,
                                                                                 String[][] partitionDataTypes) throws SQLException, IOException {
         // If no partition data types are provided or the filter is empty, prune files without partition filtering
-        if (partitionDataTypes == null || partitionDataTypes.length == 0 || filter == null || filter.isBlank()) {
-            return pruneFilesNoPartition(basePath);
+        if (filter == null || filter.isBlank()) {
+            return getAllFilesFromDeltaTable(basePath);
         }
 
         // Create a new Engine instance with the provided Configuration
@@ -59,21 +59,22 @@ public class PartitionPruning {
         ArrayNode statements = (ArrayNode) tree.get("statements");
         JsonNode firstStatement = statements.get(0);
         JsonNode whereClause = firstStatement.get("node").get("where_clause");
+        System.out.println(whereClause.toPrettyString());
 
         // If the where clause is empty, prune files without partition filtering
         if (whereClause.isEmpty()) {
-            return pruneFilesNoPartition(basePath);
+            return getAllFilesFromDeltaTable(basePath);
         }
 
         // Convert the where clause to a Delta predicate
         Predicate deltaLakePredicate = (Predicate) Transformations.toDeltaPredicate(whereClause);
-        Scan scanWithPartitionPredicate = snapshot.getScanBuilder(engine)
+        Scan filterScan = snapshot.getScanBuilder(engine)
                 .withFilter(engine, deltaLakePredicate)
                 .build();
 
         // Process the scan to collect matching files
         List<io.github.tanejagagan.sql.commons.FileStatus> result = new ArrayList<>();
-        try (CloseableIterator<FilteredColumnarBatch> fileIter = scanWithPartitionPredicate.getScanFiles(engine)) {
+        try (CloseableIterator<FilteredColumnarBatch> fileIter = filterScan.getScanFiles(engine)) {
             while (fileIter.hasNext()) {
                 FilteredColumnarBatch batch = fileIter.next();
                 try (CloseableIterator<Row> rowIter = batch.getRows()) {
@@ -94,12 +95,12 @@ public class PartitionPruning {
     }
 
     /**
-     * Prunes files in a Delta table without partition filtering.
+     * List all files in a Delta table
      *
      * @param basePath the base path of the Delta table
      * @return a list of FileStatus objects representing the pruned files
      */
-    private static List<io.github.tanejagagan.sql.commons.FileStatus> pruneFilesNoPartition(String basePath) {
+    private static List<io.github.tanejagagan.sql.commons.FileStatus> getAllFilesFromDeltaTable(String basePath) {
         // Create a new Engine instance with the provided Configuration
         Engine engine = DefaultEngine.create(new Configuration());
 
@@ -136,7 +137,6 @@ public class PartitionPruning {
             // Log any errors that occur during file pruning
             logger.error("Error processing scan files: {}", e.getMessage());
         }
-        // Return the list of pruned files
         return result;
     }
 }

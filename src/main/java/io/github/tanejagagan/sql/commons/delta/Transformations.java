@@ -188,20 +188,60 @@ public class Transformations {
         JsonNode children = conjunction.get("children");
         String conjunctionType = conjunction.get("type").asText();
 
-        if (children.size() != 2) {
-            throw new UnsupportedOperationException("Only binary conjunctions are supported");
+        // Ensure `children` exists and has at least two elements
+        if (children == null || children.size() < 2) {
+            throw new IllegalArgumentException("Conjunction must have at least two children.");
         }
 
-        Predicate leftPredicate = (Predicate) toDeltaPredicate(children.get(0));
-        Predicate rightPredicate = (Predicate) toDeltaPredicate(children.get(1));
-
         if ("CONJUNCTION_AND".equals(conjunctionType)) {
-            return new And(leftPredicate, rightPredicate);
+            return buildLeftAssociativeAnd(children);
         } else if ("CONJUNCTION_OR".equals(conjunctionType)) {
-            return new Or(leftPredicate, rightPredicate);
+            return buildLeftAssociativeOr(children);
         } else {
             throw new UnsupportedOperationException("Unsupported conjunction type: " + conjunctionType);
         }
+    }
+
+    /**
+     * Builds a left-associative nested And expression.
+     *
+     * Example:
+     * For children [A, B, C], it builds: And(And(A, B), C)
+     *
+     * @param children the JSON array of child expressions
+     * @return a nested And expression
+     * @throws IOException if an error occurs during parsing
+     */
+    private static Expression buildLeftAssociativeAnd(JsonNode children) throws IOException {
+        Expression current = (Predicate) toDeltaPredicate(children.get(0)); // Start with the first child
+
+        // Iterate through the rest of the children, building nested And expressions
+        for (int i = 1; i < children.size(); i++) {
+            current = new And((Predicate) current, (Predicate) toDeltaPredicate(children.get(i)));
+        }
+
+        return current;
+    }
+
+    /**
+     * Builds a left-associative nested Or expression.
+     *
+     * Example:
+     * For children [A, B, C], it builds: Or(Or(A, B), C)
+     *
+     * @param children the JSON array of child expressions
+     * @return a nested Or expression
+     * @throws IOException if an error occurs during parsing
+     */
+    private static Expression buildLeftAssociativeOr(JsonNode children) throws IOException {
+        Expression current = (Predicate) toDeltaPredicate(children.get(0)); // Start with the first child
+
+        // Iterate through the rest of the children, building nested Or expressions
+        for (int i = 1; i < children.size(); i++) {
+            current = new Or((Predicate) current, (Predicate) toDeltaPredicate(children.get(i)));
+        }
+
+        return current;
     }
 
     // TODO
@@ -228,16 +268,7 @@ public class Transformations {
         return new Column(columnName);
     }
 
-//    private static Expression castExpression(Expression expr, String sourceType, String targetType) {
-//        if (castingFunctions.containsKey(targetType)) {
-//            return castingFunctions.get(targetType).apply(expr);
-//        } else {
-//            throw new UnsupportedOperationException("Unsupported literal type: " + targetType);
-//        }
-//    }
-
     private static Expression toCast(JsonNode cast) throws IOException {
-        System.out.println(cast.toPrettyString());
         JsonNode child = cast.get("child");
         Expression childExpr = toDeltaPredicate(child);
         String sourceType = String.valueOf(((Literal) childExpr).getDataType()).toUpperCase();;
