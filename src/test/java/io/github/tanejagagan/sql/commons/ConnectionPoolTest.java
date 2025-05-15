@@ -75,13 +75,24 @@ public class ConnectionPoolTest {
     }
 
     @Test
-    public void testBulkIngestion() throws IOException, SQLException {
+    public void testBulkIngestionWithPartition() throws IOException, SQLException {
         String tempDir = newTempDir();
         String sql = "select generate_series, generate_series a from generate_series(10)";
         try(DuckDBConnection connection = ConnectionPool.getConnection();
             BufferAllocator allocator = new RootAllocator();
             ArrowReader reader = ConnectionPool.getReader(connection, allocator, sql, 1000)){
             ConnectionPool.bulkIngestToFile(reader, allocator, tempDir + "/bulk", List.of("a"), "parquet");
+        }
+    }
+
+    @Test
+    public void testBulkIngestionNoPartition() throws IOException, SQLException {
+        String tempDir = newTempDir();
+        String sql = "select generate_series, generate_series a from generate_series(10)";
+        try(DuckDBConnection connection = ConnectionPool.getConnection();
+            BufferAllocator allocator = new RootAllocator();
+            ArrowReader reader = ConnectionPool.getReader(connection, allocator, sql, 1000)){
+            ConnectionPool.bulkIngestToFile(reader, allocator, tempDir + "/bulk", List.of(), "parquet");
         }
     }
 }
