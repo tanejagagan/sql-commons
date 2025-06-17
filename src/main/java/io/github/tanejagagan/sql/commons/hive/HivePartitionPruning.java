@@ -1,7 +1,8 @@
-package io.github.tanejagagan.sql.commons;
+package io.github.tanejagagan.sql.commons.hive;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
+import io.github.tanejagagan.sql.commons.*;
 import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.memory.RootAllocator;
 import org.apache.arrow.vector.BigIntVector;
@@ -37,11 +38,11 @@ public class HivePartitionPruning extends PartitionPruning {
             " SELECT * FROM B where %s";
     private static final String READ_BLOB_NO_PARTITION_SQL = "SELECT filename, size, epoch_ms(last_modified) as last_modified FROM read_blob('%s')";
 
-    private static final Field UNSCAPE_PARTITION_FIELD =
+    public static final Field UNSCAPE_PARTITION_FIELD =
             new Field("unescaped_partitions", FieldType.notNullable(new ArrowType.List()),
                     List.of(new Field("children", FieldType.notNullable(new ArrowType.Utf8()), null)));
 
-    protected static final MappedReader.Function UNESCAPE_FN = (sources, target) -> {
+    public static final MappedReader.Function UNESCAPE_FN = (sources, target) -> {
         ListVector resultVector = (ListVector) target;
         ListVector f = (ListVector) sources.get(0);
         UnionListReader reader = f.getReader();
@@ -60,7 +61,7 @@ public class HivePartitionPruning extends PartitionPruning {
         }
     };
 
-    protected static String getPartitionSql(String[][] dataTypes,
+    public static String getPartitionSql(String[][] dataTypes,
                                             String tempTableName,
                                             String filter) {
         String filterToApply = filter;
@@ -102,7 +103,7 @@ public class HivePartitionPruning extends PartitionPruning {
 
     /**
      * @param basePath path can be relative to absolute
-     * @param filter filter which include partition as well as no partition columns. Function will remove the filters which are not applicable
+     * @param filterExpression filterExpression which include partition as well as no partition columns. Function will remove the filters which are not applicable
      * @param partitionDataTypes in order to cast the value to specific type
      * @return list of files and size of those files
      * @throws SQLException
@@ -114,10 +115,10 @@ public class HivePartitionPruning extends PartitionPruning {
      *                      Schema at the end &lt;filename string, size bigint, partitions &lt;array&lt;string&gt;, unescape_partitions&lt;array%lt;string&gt;&gt;
      *                      3. Serialize the data in step 2 as temp table and run the pruning sql
      *                      Final Sql looks something like `select size, filename, cast(unescape_partitions[1] as date) as dt, ....from temp table where dt = ?
-     *                      4. Remove all the filter which do not have partition columns
+     *                      4. Remove all the filterExpression which do not have partition columns
      */
     public static List<FileStatus> pruneFiles(String basePath,
-                                              String filter,
+                                              String filterExpression,
                                               String[][] partitionDataTypes) throws SQLException, IOException {
         if (partitionDataTypes == null || partitionDataTypes.length == 0) {
             return pruneFilesNoPartition(basePath);
@@ -126,7 +127,7 @@ public class HivePartitionPruning extends PartitionPruning {
         String tempTableName = "connection_temp_table_" + System.currentTimeMillis();
         List<FileStatus> result = new ArrayList<>();
         try (DuckDBConnection readConnection = ConnectionPool.getConnection()) {
-            String partitionSql = HivePartitionPruning.getPartitionSql(partitionDataTypes, tempTableName, filter);
+            String partitionSql = HivePartitionPruning.getPartitionSql(partitionDataTypes, tempTableName, filterExpression);
             String transformed = doQueryTransformation(readConnection, partitionSql,
                     Arrays.stream(partitionDataTypes).map(ss -> ss[0]).collect(Collectors.toSet()));
             try (DuckDBConnection writeConnection = ConnectionPool.getConnection();
@@ -149,6 +150,12 @@ public class HivePartitionPruning extends PartitionPruning {
         }
     }
 
+
+    public static List<FileStatus> pruneFiles(String basePath,
+                                              JsonNode filter,
+                                              String[][] partitionDataTypes) throws SQLException, IOException {
+        return List.of();
+    }
     /**
      * Retrieves all files from a specified not partitioned directory path and returns their names and sizes.
      *

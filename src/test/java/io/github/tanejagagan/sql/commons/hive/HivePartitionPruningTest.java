@@ -1,6 +1,10 @@
-package io.github.tanejagagan.sql.commons;
+package io.github.tanejagagan.sql.commons.hive;
 
 
+import io.github.tanejagagan.sql.commons.ConnectionPool;
+import io.github.tanejagagan.sql.commons.FileStatus;
+import io.github.tanejagagan.sql.commons.MinioContainerTestUtil;
+import io.github.tanejagagan.sql.commons.hive.HivePartitionPruning;
 import io.minio.MakeBucketArgs;
 import io.minio.MinioClient;
 import io.minio.errors.*;

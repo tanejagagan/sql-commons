@@ -8,6 +8,7 @@ import org.apache.arrow.memory.RootAllocator;
 import org.apache.arrow.vector.ipc.ArrowReader;
 import org.duckdb.DuckDBConnection;
 import org.duckdb.DuckDBResultSet;
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
@@ -17,6 +18,8 @@ import java.sql.Connection;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.List;
+
+import static org.junit.Assert.assertEquals;
 
 public class ConnectionPoolTest {
 
@@ -94,5 +97,18 @@ public class ConnectionPoolTest {
             ArrowReader reader = ConnectionPool.getReader(connection, allocator, sql, 1000)){
             ConnectionPool.bulkIngestToFile(reader, allocator, tempDir + "/bulk", List.of(), "parquet");
         }
+    }
+
+    @Test
+    public void testCollectAll() throws SQLException, NoSuchMethodException {
+        record LongAndString( String s, Long l){};
+        String sql = "select 's' as s, cast(1 as bigint) as l";
+        try( var c = ConnectionPool.getConnection()) {
+            var it = ConnectionPool.collectAll(c, sql, LongAndString.class);
+            it.forEach( i -> {
+                Assertions.assertEquals(new LongAndString( "s", 1L), i);
+            });
+        }
+
     }
 }

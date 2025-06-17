@@ -16,8 +16,11 @@ import org.duckdb.DuckDBResultSet;
 import java.io.Closeable;
 import java.io.IOException;
 import java.io.InputStream;
+import java.lang.reflect.Constructor;
+import java.lang.reflect.RecordComponent;
 import java.sql.*;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Properties;
 
@@ -93,6 +96,29 @@ public enum ConnectionPool {
             throw new RuntimeException("Error running sql" + sql, e);
         }
     }
+
+    public static <R extends Record> Iterable<R> collectAll(Connection connection, String sql, Class<R> rClass) throws NoSuchMethodException {
+        final var constructor = getCanonicalConstructor(rClass);
+        return collectAll(connection, sql, rs -> {
+            RecordComponent[] rc  = rClass.getRecordComponents();
+            Object[] read = new Object[rc.length];
+            for(int i = 0; i <rc.length ; i++  ) {
+                var type  = rc[i].getType();
+                read[i] = rs.getObject(i + 1 , type);
+            }
+            return constructor.newInstance(read);
+            }, rClass);
+    }
+
+    static <T extends Record> Constructor<T> getCanonicalConstructor(Class<T> cls)
+            throws NoSuchMethodException {
+        Class<?>[] paramTypes =
+                Arrays.stream(cls.getRecordComponents())
+                        .map(RecordComponent::getType)
+                        .toArray(Class<?>[]::new);
+        return cls.getDeclaredConstructor(paramTypes);
+    }
+
 
     /**
      *

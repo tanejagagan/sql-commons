@@ -37,7 +37,7 @@ Read more about it at https://medium.com/@tanejagagan/ac5e00cb96b5
 - `./mvnw exec:java -Dexec.mainClass="io.github.tanejagagan.sql.commons.delta.PartitionPruning"`
 
 ## Hive partition pruning
-`./mvnw exec:java -Dexec.mainClass="io.github.tanejagagan.sql.commons.HivePartitionPruning"`
+`./mvnw exec:java -Dexec.mainClass="io.github.tanejagagan.sql.commons.hive.HivePartitionPruning"`
 
 ## TODO Iceberg partition pruning
 

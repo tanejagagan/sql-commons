@@ -73,6 +73,24 @@ public class ExpressionFactory {
         return result;
     }
 
+    public static JsonNode andFilters(JsonNode leftFilter, JsonNode rightFilter) {
+        ObjectNode result = withClassType(ExpressionConstants.CONJUNCTION_CLASS, ExpressionConstants.CONJUNCTION_TYPE_AND);
+        ArrayNode arrayNode = new ArrayNode(JsonNodeFactory.instance);
+        arrayNode.add(leftFilter);
+        arrayNode.add(rightFilter);
+        result.set("children", arrayNode);
+        return result;
+    }
+
+    public static JsonNode orFilters(JsonNode leftFilter, JsonNode rightFilter) {
+        ObjectNode result = withClassType(ExpressionConstants.CONJUNCTION_CLASS, ExpressionConstants.CONJUNCTION_TYPE_OR);
+        ArrayNode arrayNode = new ArrayNode(JsonNodeFactory.instance);
+        arrayNode.add(leftFilter);
+        arrayNode.add(rightFilter);
+        result.set("children", arrayNode);
+        return result;
+    }
+
     private static JsonNode constantValueNode(Object value) {
         ObjectNode valueNode = new ObjectNode(JsonNodeFactory.instance);
         ObjectNode type = new ObjectNode(JsonNodeFactory.instance);

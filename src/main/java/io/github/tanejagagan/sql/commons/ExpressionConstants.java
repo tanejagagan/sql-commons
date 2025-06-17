@@ -6,6 +6,10 @@ public class ExpressionConstants {
     public static final String COLUMN_REF_CLASS = "COLUMN_REF";
     public static final String COLUMN_REF_TYPE = "COLUMN_REF";
     public static final String COMPARISON_CLASS = "COMPARISON";
+
+    public static final String SUBQUERY_CLASS = "SUBQUERY";
+
+    public static final String SUBQUERY_TYPE = "SUBQUERY";
     public static final String COMPARE_TYPE_EQUAL = "COMPARE_EQUAL";
     public static final String COMPARE_TYPE_LESSTHANOREQUALTO = "COMPARE_LESSTHANOREQUALTO";
     public static final String COMPARE_TYPE_GREATERTHANOREQUALTO = "COMPARE_GREATERTHANOREQUALTO";

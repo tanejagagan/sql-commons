@@ -3,7 +3,7 @@ package io.github.tanejagagan.sql.commons;
 import java.util.Map;
 
 
-abstract class PartitionPruning {
+public abstract class PartitionPruning {
 
     public String singleQuote(String col) {
         return String.format("'%s'", col);

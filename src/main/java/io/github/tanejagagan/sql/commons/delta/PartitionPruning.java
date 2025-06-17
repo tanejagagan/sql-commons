@@ -46,6 +46,18 @@ public class PartitionPruning {
         if (filter == null || filter.isBlank()) {
             return getAllFilesFromDeltaTable(basePath);
         }
+        // Parse the filter into a Delta predicate
+        JsonNode tree = io.github.tanejagagan.sql.commons.Transformations.parseToTree(String.format("SELECT * FROM T WHERE %s", filter));
+        return pruneFiles(basePath, io.github.tanejagagan.sql.commons.Transformations.getWhereClause(tree));
+    }
+
+    public static List<io.github.tanejagagan.sql.commons.FileStatus> pruneFiles(String basePath,
+                                                                                JsonNode whereClause) throws SQLException, IOException {
+
+        // If the where clause is empty, prune files without partition filtering
+        if (whereClause.isEmpty()) {
+            return getAllFilesFromDeltaTable(basePath);
+        }
 
         // Create a new Engine instance with the provided Configuration
         Engine engine = DefaultEngine.create(new Configuration());
@@ -53,19 +65,6 @@ public class PartitionPruning {
         // Get the Delta table and its latest snapshot
         Table deltaTable = Table.forPath(engine, basePath);
         Snapshot snapshot = deltaTable.getLatestSnapshot(engine);
-
-        // Parse the filter into a Delta predicate
-        JsonNode tree = io.github.tanejagagan.sql.commons.Transformations.parseToTree(String.format("SELECT * FROM T WHERE %s", filter));
-        ArrayNode statements = (ArrayNode) tree.get("statements");
-        JsonNode firstStatement = statements.get(0);
-        JsonNode whereClause = firstStatement.get("node").get("where_clause");
-        System.out.println(whereClause.toPrettyString());
-
-        // If the where clause is empty, prune files without partition filtering
-        if (whereClause.isEmpty()) {
-            return getAllFilesFromDeltaTable(basePath);
-        }
-
         // Convert the where clause to a Delta predicate
         Predicate deltaLakePredicate = (Predicate) Transformations.toDeltaPredicate(whereClause);
         Scan filterScan = snapshot.getScanBuilder(engine)

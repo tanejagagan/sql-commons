@@ -1,6 +1,7 @@
 package io.github.tanejagagan.sql.commons;
 
 
+import io.github.tanejagagan.sql.commons.hive.HivePartitionPruning;
 import org.apache.arrow.memory.RootAllocator;
 import org.apache.arrow.vector.FieldVector;
 import org.apache.arrow.vector.IntVector;

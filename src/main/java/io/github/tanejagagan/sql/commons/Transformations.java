@@ -52,6 +52,8 @@ public class Transformations {
 
     public static final Function<JsonNode, Boolean> IS_COMPARISON = isClass(COMPARISON_CLASS);
 
+    public static final Function<JsonNode, Boolean> IS_SUBQUERY = isType(SUBQUERY_TYPE);
+
     /**
      * Set string to ?, Integer to -1 and Decimal to -1.0
      */
@@ -371,6 +373,12 @@ public class Transformations {
         return list;
     }
 
+    public static List<JsonNode> collectSubQueries(JsonNode tree){
+        final List<JsonNode> list = new ArrayList<>();
+        find(tree, IS_SUBQUERY, list::add);
+        return list;
+    }
+
     public static void find(JsonNode node, Function<JsonNode, Boolean> matchFn,
                             Consumer<JsonNode> collectFn) {
         if (matchFn.apply(node)) {
@@ -448,6 +456,17 @@ public class Transformations {
             results.add(res);
         }
         return results;
+    }
+
+    public static JsonNode getWhereClause(JsonNode jsonNode) {
+        var statementNode = getFirstStatementNode(jsonNode);
+        return statementNode.get("where_clause");
+    }
+
+    public static JsonNode getFirstStatementNode(JsonNode jsonNode) {
+        var statements = (ArrayNode) jsonNode.get("statements");
+        var statement = statements.get(0);
+        return statement.get("node");
     }
 
     private static String escapeSpecialChar(String sql) {
