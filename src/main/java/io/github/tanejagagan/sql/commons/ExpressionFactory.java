@@ -5,7 +5,12 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
+import static io.github.tanejagagan.sql.commons.ExpressionConstants.FUNCTION_CLASS;
+import static io.github.tanejagagan.sql.commons.ExpressionConstants.FUNCTION_TYPE;
+
 public class ExpressionFactory {
+
+
 
     public static JsonNode reference(String[] value) {
         ObjectNode result = withClassType(ExpressionConstants.COLUMN_REF_CLASS, ExpressionConstants.COLUMN_REF_TYPE);
@@ -89,6 +94,24 @@ public class ExpressionFactory {
         arrayNode.add(rightFilter);
         result.set("children", arrayNode);
         return result;
+    }
+
+    public static JsonNode createFunction(String name, String schema, String catalog, JsonNode children) {
+        var orderBy = new ObjectNode(JsonNodeFactory.instance);
+        orderBy.put("type", "ORDER_MODIFIER");
+        orderBy.set("orders", new ArrayNode(JsonNodeFactory.instance));
+        var input =withClassType(FUNCTION_CLASS, FUNCTION_TYPE);
+        input.put("function_name", name);
+        input.put("schema", schema);
+        input.put("catalog",  catalog);
+        input.put("distinct", false);
+        input.put("is_operator", false);
+        input.put("export_state", false);
+        input.put("catalog", "");
+        input.set("children", children);
+        input.set("filter", null);
+        input.set("order_bys", orderBy);
+        return input;
     }
 
     private static JsonNode constantValueNode(Object value) {

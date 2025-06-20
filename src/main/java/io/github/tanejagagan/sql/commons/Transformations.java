@@ -18,6 +18,7 @@ import static io.github.tanejagagan.sql.commons.ExpressionConstants.*;
 
 public class Transformations {
 
+    public record CatalogSchemaTable(String catalog, String schema, String tableOrPath, String type) { }
     private static final ObjectMapper objectMapper = new ObjectMapper();
 
     public static final String JSON_SERIALIZE_SQL = "SELECT  cast(json_serialize_sql('%s') as string)";
@@ -467,6 +468,38 @@ public class Transformations {
         var statements = (ArrayNode) jsonNode.get("statements");
         var statement = statements.get(0);
         return statement.get("node");
+    }
+
+    public static CatalogSchemaTable getTableOrPath(JsonNode query, String catalogName, String schemaName) {
+        var statement = (ObjectNode) Transformations.getFirstStatementNode(query);
+        var fromNode = statement.get("from_table");
+        var fromTableType = fromNode.get("type").asText();
+        switch (fromTableType) {
+            case "BASE_TABLE" -> {
+                var schemaFromQuery = fromNode.get("schema_name").asText();
+                var catalogFromQuery = fromNode.get("catalog_name").asText();
+                var s = schemaFromQuery == null || schemaFromQuery.isEmpty() ? schemaName : schemaFromQuery;
+                var c = catalogFromQuery == null || catalogFromQuery.isEmpty() ? catalogName : catalogFromQuery;
+                return new CatalogSchemaTable(c, s, fromNode.get("table_name").asText(), "BASE_TABLE");
+            }
+            case "TABLE_FUNCTION" -> {
+                var function = fromNode.get("function");
+                var functionName = function.get("function_name");
+                var functionChildren = function.get("children");
+                var firstChild = functionChildren.get(0);
+                return new CatalogSchemaTable(null, null, firstChild.get("value").get("value").asText(), "TABLE_FUNCTION");
+            }
+            default -> {
+                return null;
+            }
+        }
+    }
+
+
+    public static String getTableFunction(JsonNode tree) {
+        var fromTable = getFirstStatementNode(tree).get("from_table");
+        var tableFunction = fromTable.get("function");
+        return tableFunction.get("function_name").asText();
     }
 
     private static String escapeSpecialChar(String sql) {

@@ -2,6 +2,7 @@ package io.github.tanejagagan.sql.commons.hive;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.github.tanejagagan.sql.commons.*;
 import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.memory.RootAllocator;
@@ -152,9 +153,10 @@ public class HivePartitionPruning extends PartitionPruning {
 
 
     public static List<FileStatus> pruneFiles(String basePath,
-                                              JsonNode filter,
+                                              JsonNode tree,
                                               String[][] partitionDataTypes) throws SQLException, IOException {
-        return List.of();
+
+        return pruneFiles(basePath, getFilterSql(tree), partitionDataTypes);
     }
     /**
      * Retrieves all files from a specified not partitioned directory path and returns their names and sizes.
@@ -234,6 +236,20 @@ public class HivePartitionPruning extends PartitionPruning {
             }
         }
         return sb.toString();
+    }
+
+    private static String getFilterSql(JsonNode tree) throws SQLException, JsonProcessingException {
+        var filter = Transformations.getWhereClause(tree);
+        var t = Transformations.parseToTree("select * from t");
+        var firstStatement = (ObjectNode)Transformations.getFirstStatementNode(t);
+        firstStatement.set("where_clause", filter);
+        var newSql = Transformations.parseToSql(t);
+        var index = newSql.indexOf("where");
+        if(index < 0) {
+            return "";
+        } else {
+            return newSql.substring(index);
+        }
     }
 }
 

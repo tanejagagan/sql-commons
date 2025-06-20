@@ -23,4 +23,6 @@ public class ExpressionConstants {
     public static final String CONJUNCTION_TYPE_AND = "CONJUNCTION_AND";
     public static final String CONJUNCTION_TYPE_OR = "CONJUNCTION_OR";
     public static final String SELECT_NODE_TYPE = "SELECT_NODE";
+    public static final String FUNCTION_CLASS = "FUNCTION";
+    public static final String FUNCTION_TYPE = "FUNCTION";
 }
