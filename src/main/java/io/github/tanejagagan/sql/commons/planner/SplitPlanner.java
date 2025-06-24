@@ -14,7 +14,6 @@ public interface SplitPlanner {
 
 
     public static List<List<FileStatus>> getSplits(JsonNode tree,
-                                                   String[][] partitionDataTypes,
                                                    long maxSplitSize) throws SQLException, IOException {
         var filterExpression = Transformations.getWhereClause(tree);
         var catalogSchemaAndTable = Transformations.getTableOrPath(tree, null, null);
@@ -22,8 +21,11 @@ public interface SplitPlanner {
         var path = catalogSchemaAndTable.tableOrPath();
         List<FileStatus> fileStatuses;
         switch (tableFunction) {
-            case "read_parquet" -> fileStatuses = HivePartitionPruning.pruneFiles(path,
-                    tree, partitionDataTypes);
+            case "read_parquet" -> {
+                var partitionDataTypes  = Transformations.getHivePartition(tree);
+                fileStatuses = HivePartitionPruning.pruneFiles(path,
+                        tree, partitionDataTypes);
+            }
             case "read_delta" ->
                     fileStatuses = io.github.tanejagagan.sql.commons.delta.PartitionPruning.pruneFiles(path, filterExpression);
             default -> throw new SQLException("unsupported type : " + tableFunction);

@@ -13,6 +13,7 @@ import java.sql.SQLException;
 import java.util.*;
 import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.stream.Collectors;
 
 import static io.github.tanejagagan.sql.commons.ExpressionConstants.*;
 
@@ -495,13 +496,116 @@ public class Transformations {
         }
     }
 
-
     public static String getTableFunction(JsonNode tree) {
         var fromTable = getFirstStatementNode(tree).get("from_table");
         var tableFunction = fromTable.get("function");
         return tableFunction.get("function_name").asText();
     }
 
+    public static String[][]  getHivePartition(JsonNode tree){
+        var fromTable = getFirstStatementNode(tree).get("from_table");
+        var tableFunction = fromTable.get("function");
+        var children = (ArrayNode) tableFunction.get("children");
+        JsonNode partition = null;
+        for( var c :  children){
+            if(isHivePartition(c)){
+                partition = c;
+                break;
+            }
+        }
+        return extractPartition(partition);
+    }
+
+    private static boolean isHivePartition(JsonNode node) {
+        if(node.get("type") != null  && node.get("type").asText().equals("COMPARE_EQUAL") && node.get("left") != null){
+            var left = node.get("left");
+            var names = left.get("column_names");
+            return names.get(0).asText().equals("hive_types");
+        }
+        return false;
+    }
+
+    private static String[][] extractPartition(JsonNode node){
+        var children = (ArrayNode) node.get("right").get("children");
+        var res = new String[children.size()][];
+        int index = 0;
+        for(JsonNode  c : children) {
+            var a = c.get("alias").asText();
+            var cn =  c.get("column_names").get(0).asText();
+            res[index++] = new String[]{a, cn};
+        }
+        return res;
+    }
+
+    public static String getCast(String schema) throws SQLException, JsonProcessingException {
+        var query = String.format("select null::struct(%s)", schema);
+        var tree = Transformations.parseToTree(query);
+        System.out.println(tree.toPrettyString());
+        var statement = Transformations.getFirstStatementNode(tree);
+        var selectList = (ArrayNode)statement.get("select_list");
+        var firstSelect = selectList.get(0);
+        var castType= firstSelect.get("cast_type");
+        var childType = (ArrayNode) castType.get("type_info").get("child_types");
+        List<String> childTypeString = new ArrayList<>();
+        for( var c : childType){
+            childTypeString.add(getStructChildTypeString(c));
+        }
+        return childTypeString.stream().map( t-> "null::" + t).collect(Collectors.joining(","));
+    }
+
+    private static String structCast(JsonNode node) {
+        var typeInfo = (ArrayNode) node.get("type_info").get("child_types");
+        List<String> res = new ArrayList<>();
+        for(JsonNode n : typeInfo) {
+            var s = getStructChildTypeString(n);
+            var first = n.get("first").asText();
+            res.add(first + " " + s);
+        }
+        return "STRUCT (" + String.join(",", res) + ")";
+    }
+
+    private static String mapCast(JsonNode node) {
+        var typeInfo = (ArrayNode)node.get("type_info").get("child_type").get("type_info").get("child_types");
+        var key = getTypeString(typeInfo.get(1).get("second"));
+        var value = getTypeString(typeInfo.get(1).get("second"));
+        return "Map(" + key +"," + value +")";
+    }
+
+    private static String listCast(JsonNode node){
+        var childType = getTypeString(node.get("type_info").get("child_type"));
+        return childType + "[]";
+    }
+
+    public static String decimalCast(JsonNode node) {
+        var width = node.get("type_info").get("width");
+        var scale = node.get("type_info").get("scale");
+        return String.format("DECIMAL(%s,%s)", width, scale);
+    }
+
+    private static String getStructChildTypeString(JsonNode jsonNode){
+        return getTypeString(jsonNode.get("second"));
+    }
+
+    private static String getTypeString(JsonNode jsonNode){
+        var id = jsonNode.get("id").asText();
+        switch (id) {
+            case "STRUCT" -> {
+                return structCast(jsonNode);
+            }
+            case "MAP" -> {
+                return mapCast(jsonNode);
+            }
+            case "LIST" -> {
+                return listCast(jsonNode);
+            }
+            case "DECIMAL" -> {
+                return decimalCast(jsonNode);
+            }
+            default -> {
+                return id;
+            }
+        }
+    }
     private static String escapeSpecialChar(String sql) {
         return sql.replaceAll("'", "''");
     }
