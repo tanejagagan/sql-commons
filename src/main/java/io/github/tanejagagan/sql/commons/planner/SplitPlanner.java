@@ -1,6 +1,10 @@
 package io.github.tanejagagan.sql.commons.planner;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.JsonNodeFactory;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+import io.github.tanejagagan.sql.commons.ExpressionFactory;
 import io.github.tanejagagan.sql.commons.FileStatus;
 import io.github.tanejagagan.sql.commons.Transformations;
 import io.github.tanejagagan.sql.commons.hive.HivePartitionPruning;
@@ -8,6 +12,8 @@ import io.github.tanejagagan.sql.commons.hive.HivePartitionPruning;
 import java.io.IOException;
 import java.sql.SQLException;
 import java.util.*;
+
+import static io.github.tanejagagan.sql.commons.ExpressionFactory.createFunction;
 
 public interface SplitPlanner {
 
@@ -52,5 +58,21 @@ public interface SplitPlanner {
             result.add(current);
         }
         return result;
+    }
+
+    public static void replacePathInFromClause(JsonNode tree, String[] paths) {
+        var formatToFunction = Map.of("read_delta", "read_parquet");
+        var format = Transformations.getTableFunction(tree);
+        var functionName = formatToFunction.getOrDefault(format, format);
+        var from = (ObjectNode) Transformations.getFirstStatementNode(tree).get("from_table");
+        var listChildren = new ArrayNode(JsonNodeFactory.instance);
+        for (String path : paths) {
+            listChildren.add(ExpressionFactory.constant(path));
+        }
+        var listFunction = createFunction("list_value", "main", "", listChildren);
+        var parquetChildren = new ArrayNode(JsonNodeFactory.instance);
+        parquetChildren.add(listFunction);
+        var readParquetFunction = createFunction(functionName, "", "", parquetChildren);
+        from.set("function", readParquetFunction);
     }
 }

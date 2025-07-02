@@ -196,10 +196,14 @@ public class HivePartitionPruning extends PartitionPruning {
     protected static String getQueryString(String basePath,
                                          int partitionsLen) {
         String readBlobPath = getReadBlobPath(basePath, partitionsLen, "parquet");
-        return String.format(READ_PARTITION_BLOB_SQL, basePath, partitionsLen, readBlobPath);
+        var cBasePath = (basePath.contains("/*")) ? basePath.substring(0, basePath.indexOf("/*")) : basePath;
+        return String.format(READ_PARTITION_BLOB_SQL, cBasePath, partitionsLen, readBlobPath);
     }
 
     private static String getReadBlobPath(String basePath, int partitionsLen, String format) {
+        if (basePath.contains("/*")) {
+            return basePath;
+        }
         return basePath +
                 "/*".repeat(Math.max(0, partitionsLen)) +
                 "/*." +
