@@ -276,55 +276,52 @@ public enum ConnectionPool {
     public static ArrowReader getReader(DuckDBConnection connection,
                                         BufferAllocator allocator,
                                         String sql,
-                                        int batchSize)  {
-        try {
-            final Statement statement = connection.createStatement();
-            statement.execute(sql);
-            return new ArrowReader(allocator) {
-                final Statement _statement = statement;
-                final DuckDBResultSet resultSet = (DuckDBResultSet) statement.getResultSet();
-                private final ArrowReader internal = (ArrowReader) resultSet.arrowExportStream(allocator, batchSize);
+                                        int batchSize)  throws SQLException {
 
-                @Override
-                public boolean loadNextBatch() throws IOException {
-                    return internal.loadNextBatch();
-                }
+        final Statement statement = connection.createStatement();
+        statement.execute(sql);
+        return new ArrowReader(allocator) {
+            final Statement _statement = statement;
+            final DuckDBResultSet resultSet = (DuckDBResultSet) statement.getResultSet();
+            private final ArrowReader internal = (ArrowReader) resultSet.arrowExportStream(allocator, batchSize);
 
-                @Override
-                public long bytesRead() {
-                    return internal.bytesRead();
-                }
+            @Override
+            public boolean loadNextBatch() throws IOException {
+                return internal.loadNextBatch();
+            }
 
-                @Override
-                protected void closeReadSource() throws IOException {
-                    try {
-                        internal.close();
-                    } catch (NullPointerException e) {
-                        // There are some scenarios where Duckdb itself closes the reader
-                        // try to close it with closeReadSources
-                        internal.close(false);
-                    }
-                    try {
-                        resultSet.close();
-                        _statement.close();
-                    } catch (SQLException e) {
-                        throw new RuntimeException(e);
-                    }
-                }
+            @Override
+            public long bytesRead() {
+                return internal.bytesRead();
+            }
 
-                @Override
-                protected Schema readSchema() throws IOException {
-                    return internal.getVectorSchemaRoot().getSchema();
+            @Override
+            protected void closeReadSource() throws IOException {
+                try {
+                    internal.close();
+                } catch (NullPointerException e) {
+                    // There are some scenarios where Duckdb itself closes the reader
+                    // try to close it with closeReadSources
+                    internal.close(false);
                 }
+                try {
+                    resultSet.close();
+                    _statement.close();
+                } catch (SQLException e) {
+                    throw new RuntimeException(e);
+                }
+            }
 
-                @Override
-                public VectorSchemaRoot getVectorSchemaRoot() throws IOException {
-                    return internal.getVectorSchemaRoot();
-                }
-            };
-        } catch (SQLException e ) {
-            throw new RuntimeException(e);
-        }
+            @Override
+            protected Schema readSchema() throws IOException {
+                return internal.getVectorSchemaRoot().getSchema();
+            }
+
+            @Override
+            public VectorSchemaRoot getVectorSchemaRoot() throws IOException {
+                return internal.getVectorSchemaRoot();
+            }
+        };
     }
 
     public static DuckDBConnection getConnection()  {
